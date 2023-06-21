@@ -3,6 +3,8 @@ Julia for HPC workshop @ [**SCALES conference 2023**](https://model.uni-mainz.de
 
 > :warning: Make sure to `git pull` this repo right before starting the workshop on Monday morning in order to ensure you have access to the latest updates
 
+The computational resources for this workshop are provided by the “Paderborn Center for Parallel Computing (PC2)” [https://pc2.uni-paderborn.de/](https://pc2.uni-paderborn.de/) as part of the "NHR Alliance” [https://www.nhr-verein.de/](https://www.nhr-verein.de/).
+
 ## Program
 
 ### Morning session (9h - 12h30)
@@ -127,8 +129,44 @@ $$ ∇⋅(D ∇ C) = \frac{∂C}{∂t} $$
 Because it is still challenging. Why?
 - Very few software uses it efficiently.
 - It requires to rethink the solving strategy as non-local operations will kill the fun.
-## The challenge of today
 
+## The challenge of today
+The goal fo today is to solve a subsurface flow problem related to injection and extraction of fluid in the underground as it could occur in geothermal operations. For this purpose, we will solve an elliptic problem for fluid pressure diffusion, given impermeable boundary conditions (no flux) and two source terms, inkection and extraction wells. In addition, we will place a low permeability barrier in-between the wells to simulate a more challenging flow configuration. The model configuration is depicted hereafter:
+
+![model setup](./docs/model_setup.png)
+
+Although on the vanilla side, this problem presents several challenges to be solved efficiently. We will need to achieve:
+- an efficient steady-state solve of an elliptic equation
+- handle source terms
+- handle spatially variable material parameters
+
+> :bulb: For practical purpose, we will work in 2D, however everything we will develop today is readily extensible to 3D.
+
+The system of equation we will solve reads:
+
+$$ q = -K~∇P_f ~, $$
+
+$$ 0 = ∇⋅q -Q_f~, $$
+
+where $q$ is the diffusive flux, $P_f$ the fluid pressure, $K$ is the spatially variable diffusion coefficient, and $Q_f$ the source term.
+
+We will use a naïve iterative solving strategy combined to a finite-difference discretisation on a regular Cartesian staggered grid:
+
+![staggrid](./docs/staggrid.png)
+
+The iterative approach relies in replacing the 0 in the mass balance equation by a pseudo-time derivative $∂/∂\tau$ and let it reahc a steady state:
+
+$$ \frac{∂P_f}{∂\tau} = ∇⋅q -Q_f~. $$
+
+Introducing the residual $RP_f$, one can re-write the system of equations as:
+
+$$ q = -K~∇P_f ~, $$
+
+$$ RP_f = ∇⋅q -Q_f~, $$
+
+$$ \frac{∂P_f}{∂\tau} = -RP_f~. $$
+
+We will stop the iterations when the $\mathrm{L_{inf}}$ norm of $P_f$ drops below a defined tolerance `max(abs.(RPf)) < ϵtol`.
 
 ## Hands-on I
 
