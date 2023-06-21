@@ -35,7 +35,7 @@ Julia for HPC workshop @ [**SCALES conference 2023**](https://model.uni-mainz.de
   - Make combined loss (pressure + flux)
 - **Wrapping up** & outlook :beer:
 
-### The `SMALL` print
+## The `SMALL` print
 The goal of today's workshop is to develop a fast iterative GPU-based solver for elliptic equations and use it to:
 1. Solve a steady state subsurface flow problem (geothermal operations, injection and extraction of fluids)
 2. Invert for the subsurface permeability having a sparse array of fluid pressure observations
