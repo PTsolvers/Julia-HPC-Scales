@@ -5,8 +5,8 @@ Julia for HPC workshop @ [**SCALES conference 2023**](https://model.uni-mainz.de
 
 | The computational resources for this workshop are provided by the      |                |
 | :------------: | :------------: |
-| **Paderborn Center for Parallel Computing (PC2)** [https://pc2.uni-paderborn.de/](https://pc2.uni-paderborn.de/) | ![PC2](docs/Logo_PC2_rgb.jpg) |
-| **NHR Alliance** [https://www.nhr-verein.de/](https://www.nhr-verein.de/) | ![out visu](docs/NHR_logo.png) |
+| [**Paderborn Center for Parallel Computing (PC2)**](https://pc2.uni-paderborn.de/) | [![PC2](docs/Logo_PC2_rgb.jpg)](https://pc2.uni-paderborn.de/) |
+| **PC2** is a member of the [**NHR Alliance**](https://www.nhr-verein.de/) | [![out visu](docs/NHR_logo.png)](https://www.nhr-verein.de/) |
 
 
 
