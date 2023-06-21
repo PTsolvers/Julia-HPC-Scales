@@ -1,7 +1,7 @@
 # Julia-HPC-Scales
 Julia for HPC workshop @ [**SCALES conference 2023**](https://model.uni-mainz.de/scales-conference-2023/)
 
-> :warning: Make sure to `git pull` this repo right before starting the workshop on Monday mornign in order to ensure you have access to the latest updates
+> :warning: Make sure to `git pull` this repo right before starting the workshop on Monday morning in order to ensure you have access to the latest updates
 
 ## Program
 
