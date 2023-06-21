@@ -50,7 +50,7 @@ The main Julia packages we will rely on are:
 - [CairoMakie.jl](https://github.com/MakieOrg/Makie.jl) for plotting
 - [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl) to extend the vanilla gradient-descent procedure
 
-Most of the workshop is based on "hands-on". Changes to the scripts are incremental and should allow to build up complexity throughout the day. Blanked-out scripts for most of the steps are available in the [scripts](/scripts/) folder. Solutions scripts will be shared at some point in the [scripts_solutions](/scripts_solutions) folder.
+Most of the workshop is based on "hands-on". Changes to the scripts are incremental and should allow to build up complexity throughout the day. Blanked-out scripts for most of the steps are available in the [scripts](scripts/) folder. Solutions scripts (following the `s_xxx.jl` pattern) will be shared at some point in the [scripts_solutions](scripts_solutions) folder.
 
 #### :bulb: Useful extra resources
 - The Julia language: [https://julialang.org](https://julialang.org)
@@ -67,8 +67,10 @@ If all went fine, you should be able to execute the following command in your Ju
 ```julia-repl
 julia> include("visu_2D.jl")
 ```
+
 which will produce this figure:
-![](/docs/out_visu_2D.png)
+
+![out visu](docs/out_visu_2D.png)
 
 ## Julia for HPC
 
@@ -87,10 +89,10 @@ Too good to be true? Hold on 🙂 ...
 - It's around for more than a decade
 - It shows massive performance gain compared to serial CPU computing
 - First exascale supercomputer, Frontier, is full of GPUs
-![Frontier](./docs/frontier.png)
+![Frontier](docs/frontier.png)
 
 ### Performance that matters
-![cpu_gpu_evo](./docs/cpu_gpu_evo.png)
+![cpu_gpu_evo](docs/cpu_gpu_evo.png)
 
 Taking a look at a recent GPU and CPU:
 - Nvidia Tesla A100 GPU
@@ -133,7 +135,7 @@ Because it is still challenging. Why?
 ## The challenge of today
 The goal fo today is to solve a subsurface flow problem related to injection and extraction of fluid in the underground as it could occur in geothermal operations. For this purpose, we will solve an elliptic problem for fluid pressure diffusion, given impermeable boundary conditions (no flux) and two source terms, inkection and extraction wells. In addition, we will place a low permeability barrier in-between the wells to simulate a more challenging flow configuration. The model configuration is depicted hereafter:
 
-![model setup](./docs/model_setup.png)
+![model setup](docs/model_setup.png)
 
 Although on the vanilla side, this problem presents several challenges to be solved efficiently. We will need to achieve:
 - an efficient steady-state solve of an elliptic equation
@@ -152,7 +154,7 @@ where $q$ is the diffusive flux, $P_f$ the fluid pressure, $K$ is the spatially 
 
 We will use a naïve iterative solving strategy combined to a finite-difference discretisation on a regular Cartesian staggered grid:
 
-![staggrid](./docs/staggrid.png)
+![staggrid](docs/staggrid.png)
 
 The iterative approach relies in replacing the 0 in the mass balance equation by a pseudo-time derivative $∂/∂\tau$ and let it reahc a steady state:
 
@@ -169,6 +171,27 @@ $$ \frac{∂P_f}{∂\tau} = -RP_f~. $$
 We will stop the iterations when the $\mathrm{L_{inf}}$ norm of $P_f$ drops below a defined tolerance `max(abs.(RPf)) < ϵtol`.
 
 ## Hands-on I
+Let's get started. In this first hands-on, we will work towards making an efficient iterative GPU solver for the forward steady state flow problem.
+
+### Task 1: Steady-state diffusion problem
+The first script we will work on is [scripts/geothermal_2D_noacc.jl](scripts/geothermal_2D_noacc.jl). This script builds upon the [scripts/visu_2D.jl](scripts/visu_2D.jl) scripts and contains the basic structure of the iterative code and the updated `# numerics` section.
+
+As first task, let's complete the physics section in the iteration loop, replacing `# ???` by actual code.
+
+Once done, let's run the script and briefly check how iteration count normalised by `nx` scales when changing the resolution.
+
+### Task 2: The accelerated pseudo-transient method
+
+
+### Task 3: From CPU to GPU using array programming
+
+
+### Task 4: Kernel programming
+
+#### Task 4a: CPU "kernel" programming
+Actually using multi-threading
+
+#### Task 4b: GPU kernel programming
 
 ## The optimisation problem
 
