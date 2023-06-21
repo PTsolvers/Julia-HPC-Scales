@@ -133,7 +133,7 @@ Because it is still challenging. Why?
 - It requires to rethink the solving strategy as non-local operations will kill the fun.
 
 ## The challenge of today
-The goal fo today is to solve a subsurface flow problem related to injection and extraction of fluid in the underground as it could occur in geothermal operations. For this purpose, we will solve an elliptic problem for fluid pressure diffusion, given impermeable boundary conditions (no flux) and two source terms, inkection and extraction wells. In addition, we will place a low permeability barrier in-between the wells to simulate a more challenging flow configuration. The model configuration is depicted hereafter:
+The goal fo today is to solve a subsurface flow problem related to injection and extraction of fluid in the underground as it could occur in geothermal operations. For this purpose, we will solve an elliptic problem for fluid pressure diffusion, given impermeable boundary conditions (no flux) and two source terms, injection and extraction wells. In addition, we will place a low permeability barrier in-between the wells to simulate a more challenging flow configuration. The model configuration is depicted hereafter:
 
 ![model setup](docs/model_setup.png)
 
@@ -144,7 +144,7 @@ Although on the vanilla side, this problem presents several challenges to be sol
 
 > :bulb: For practical purpose, we will work in 2D, however everything we will develop today is readily extensible to 3D.
 
-The system of equation we will solve reads:
+The corresponding system of equation reads:
 
 $$ q = -K~∇P_f ~, $$
 
@@ -152,11 +152,11 @@ $$ 0 = ∇⋅q -Q_f~, $$
 
 where $q$ is the diffusive flux, $P_f$ the fluid pressure, $K$ is the spatially variable diffusion coefficient, and $Q_f$ the source term.
 
-We will use a naïve iterative solving strategy combined to a finite-difference discretisation on a regular Cartesian staggered grid:
+We will use an accelerated iterative solving strategy combined to a finite-difference discretisation on a regular Cartesian staggered grid:
 
 ![staggrid](docs/staggrid.png)
 
-The iterative approach relies in replacing the 0 in the mass balance equation by a pseudo-time derivative $∂/∂\tau$ and let it reahc a steady state:
+The iterative approach relies in replacing the 0 in the mass balance equation by a pseudo-time derivative $∂/∂\tau$ and let it reach a steady state:
 
 $$ \frac{∂P_f}{∂\tau} = ∇⋅q -Q_f~. $$
 
@@ -169,6 +169,8 @@ $$ RP_f = ∇⋅q -Q_f~, $$
 $$ \frac{∂P_f}{∂\tau} = -RP_f~. $$
 
 We will stop the iterations when the $\mathrm{L_{inf}}$ norm of $P_f$ drops below a defined tolerance `max(abs.(RPf)) < ϵtol`.
+
+This rather naive iterative strategy can be accelerated using the accelerated pseudo-transient method [(Räss et al., 2022)](https://doi.org/10.5194/gmd-15-5757-2022). In a nutshell, pseudo-time derivative can also be added to the fluxes turning the system of equations into a damped wave equation. Finding the optimal damping parameter further leads to significant acceleration in solution procedure.
 
 ## Hands-on I
 Let's get started. In this first hands-on, we will work towards making an efficient iterative GPU solver for the forward steady state flow problem.
