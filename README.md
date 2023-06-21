@@ -32,7 +32,7 @@ The computational resources for this workshop are provided by the “Paderborn C
   - Gradient-based inversion (Gradient descent - GD)
     - Vanilla GD by hand
     - Using [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl)
-- [**Exercises** (optionnal) :computer:](#exercises-optionnal)
+- [**Exercises** (optional) :computer:](#exercises-optionnal)
   - Go for 3D
   - Make combined loss (pressure + flux)
 - **Wrapping up** & outlook :beer:
@@ -180,20 +180,30 @@ The first script we will work on is [scripts/geothermal_2D_noacc.jl](scripts/geo
 
 As first task, let's complete the physics section in the iteration loop, replacing `# ???` by actual code.
 
-Once done, let's run the script and briefly check how iteration count normalised by `nx` scales when changing the resolution.
+Once done, let's run the script and briefly check how iteration count normalised by `nx` scales when changing the grid resolution.
 
 ### Task 2: The accelerated pseudo-transient method
+As you can see, the iteration count does not really scales with increasing grid resolution and the overall iteration count is really large.
 
+To address this issue, we can implement the accelerated pseudo-transient method [(Räss et al., 2022)](https://doi.org/10.5194/gmd-15-5757-2022). Practically, we will define residuals for both x and z fluxes (`Rqx`, `Rqz`) and provide an update rule based on some optimal numerical parameters consistent with the derivations in [(Räss et al., 2022)](https://doi.org/10.5194/gmd-15-5757-2022).
+
+Starting from the [scripts/geothermal_2D.jl](scripts/geothermal_2D.jl) script, let's implement the acceleration technique. We can now reduce the cfl from `clf = 1 / 4.1` to `cfl = 1 / 2.1`, and `dτ = cfl * min(dx, dz)^2` becomes now `vdτ = cfl * min(dx, dz)`. Other modifications are the introduction of a numerical Reynolds number (`re = 0.8π`) and the change of `maxiter = 30nx` and `ncheck = 2nx`.
+
+Let's complete the physics section in the iteration loop, replacing `# ???` with actual code.
+
+Run the code and check how the iteration count scales as function of grid resolution.
 
 ### Task 3: From CPU to GPU using array programming
 
 
 ### Task 4: Kernel programming
 
+
 #### Task 4a: CPU "kernel" programming
 Actually using multi-threading
 
 #### Task 4b: GPU kernel programming
+
 
 ## The optimisation problem
 
