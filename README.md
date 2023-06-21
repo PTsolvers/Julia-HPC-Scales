@@ -199,7 +199,11 @@ Let's complete the physics section in the iteration loop, replacing `# ???` with
 Run the code and check how the iteration count scales as function of grid resolution.
 
 ### Task 3: From CPU to GPU using array programming
+So far so good, we have an efficient algorithm to iteratively converge the elliptic subsurface flow problem.
 
+The next step is to briefly showcase how to port the vectorised Julia code, using array "broadcasting", to GPU computing using "array programming". As other languages, one way to proceed in Julia is to simply initialise all arrays in GPU memory.
+
+Julia will create GPU function during the code compilation (yes, Julia code is actually compiled "just ahead of time") and execute the vectorised operations on the GPU.
 
 ### Task 4: Kernel programming
 
