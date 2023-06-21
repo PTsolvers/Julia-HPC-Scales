@@ -70,7 +70,7 @@ Let's go back to the email titled "**SCALES workshop - login credentials**" in o
 
 If all went fine, you should be able to execute the following command in your Julia REPL:
 ```julia-repl
-julia> include("visu_2D.jl")
+julia> include("scripts/visu_2D.jl")
 ```
 
 which will produce this figure:
@@ -130,7 +130,7 @@ Let's assess how close from memory copy (1355 GB/s) we can get solving a 2D diff
 
 $$ ∇⋅(D ∇ C) = \frac{∂C}{∂t} $$
 
-👉 Let's test the performance using a simple [scripts/perftest.jl](scripts/perftest.jl) script.
+👉 Let's test the performance using a simple [perftest.jl](scripts/perftest.jl) script.
 
 ### Why to still bother with GPU computing in 2023
 Because it is still challenging. Why?
@@ -181,7 +181,7 @@ This rather naive iterative strategy can be accelerated using the accelerated ps
 Let's get started. In this first hands-on, we will work towards making an efficient iterative GPU solver for the forward steady state flow problem.
 
 ### Task 1: Steady-state diffusion problem
-The first script we will work on is [scripts/geothermal_2D_noacc.jl](scripts/geothermal_2D_noacc.jl). This script builds upon the [scripts/visu_2D.jl](scripts/visu_2D.jl) scripts and contains the basic structure of the iterative code and the updated `# numerics` section.
+The first script we will work on is [geothermal_2D_noacc.jl](scripts/geothermal_2D_noacc.jl). This script builds upon the [visu_2D.jl](scripts/visu_2D.jl) scripts and contains the basic structure of the iterative code and the updated `# numerics` section.
 
 As first task, let's complete the physics section in the iteration loop, replacing `# ???` by actual code.
 
@@ -192,7 +192,7 @@ As you can see, the iteration count does not really scales with increasing grid 
 
 To address this issue, we can implement the accelerated pseudo-transient method [(Räss et al., 2022)](https://doi.org/10.5194/gmd-15-5757-2022). Practically, we will define residuals for both x and z fluxes (`Rqx`, `Rqz`) and provide an update rule based on some optimal numerical parameters consistent with the derivations in [(Räss et al., 2022)](https://doi.org/10.5194/gmd-15-5757-2022).
 
-Starting from the [scripts/geothermal_2D.jl](scripts/geothermal_2D.jl) script, let's implement the acceleration technique. We can now reduce the cfl from `clf = 1 / 4.1` to `cfl = 1 / 2.1`, and `dτ = cfl * min(dx, dz)^2` becomes now `vdτ = cfl * min(dx, dz)`. Other modifications are the introduction of a numerical Reynolds number (`re = 0.8π`) and the change of `maxiter = 30nx` and `ncheck = 2nx`.
+Starting from the [geothermal_2D.jl](scripts/geothermal_2D.jl) script, let's implement the acceleration technique. We can now reduce the cfl from `clf = 1 / 4.1` to `cfl = 1 / 2.1`, and `dτ = cfl * min(dx, dz)^2` becomes now `vdτ = cfl * min(dx, dz)`. Other modifications are the introduction of a numerical Reynolds number (`re = 0.8π`) and the change of `maxiter = 30nx` and `ncheck = 2nx`.
 
 Let's complete the physics section in the iteration loop, replacing `# ???` with actual code.
 
@@ -203,7 +203,19 @@ So far so good, we have an efficient algorithm to iteratively converge the ellip
 
 The next step is to briefly showcase how to port the vectorised Julia code, using array "broadcasting", to GPU computing using "array programming". As other languages, one way to proceed in Julia is to simply initialise all arrays in GPU memory.
 
-Julia will create GPU function during the code compilation (yes, Julia code is actually compiled "just ahead of time") and execute the vectorised operations on the GPU.
+Julia will create GPU function during the code compilation (yes, Julia code is actually compiled "just ahead of time") and execute the vectorised operations on the GPU. **In this workshop we will use [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) to target Nvidia GPUs**, but the [Julia GPU](https://juliagpu.org/) ecosystem supports AMD, ARM and Intel GPUs through [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl), [Metal.jl](https://github.com/JuliaGPU/Metal.jl) and [oneAPI.jl](https://github.com/JuliaGPU/oneAPI.jl), respectively.
+
+The following changes are needed to execute the vectorised CPU Julia [geothermal_2D.jl](scripts/geothermal_2D.jl) script on a GPU:
+
+- Array initialisation need now to be prepended with `CUDA.`, i.e., `Pf = zeros(nx, nz)` becomes `Pf = CUDA.zeros(Float64, nx, nz)`.
+- Default precision in CUDA.jl is `Float32`, i.e., single precision. To use double precision, one needs to specify `Float64` during initialisation.
+- Using `CUDA.device!(0)` allows to select a specific GPU on a multi-GPU node.
+- To avoid "scalar indexing", indexing of `Qf` array for well location needs to be updated from `Qf[x_iw, z_w]` to `Qf[x_iw:x_iw, z_w:z_w]` (to make it look like a range).
+- GPU arrays passed for plotting need to be converted back to host storage first, using `Array()`.
+
+Implement those changes in the [geothermal_2D_gpu_ap.jl](scripts/geothermal_2D_gpu_ap.jl) script, replacing the `#= ??? =#` comments.
+
+These minor changes allow us to use GPU acceleration out of the box. However, one may not achieve optimal performance using array programming on GPUs. The alternative is to use kernel programming.
 
 ### Task 4: Kernel programming
 
