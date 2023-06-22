@@ -173,7 +173,17 @@ $$ \frac{∂P_f}{∂\tau} = -RP_f~. $$
 
 We will stop the iterations when the $\mathrm{L_{inf}}$ norm of $P_f$ drops below a defined tolerance `max(abs.(RPf)) < ϵtol`.
 
-This rather naive iterative strategy can be accelerated using the accelerated pseudo-transient method [(Räss et al., 2022)](https://doi.org/10.5194/gmd-15-5757-2022). In a nutshell, pseudo-time derivative can also be added to the fluxes turning the system of equations into a damped wave equation. Finding the optimal damping parameter further leads to significant acceleration in solution procedure.
+This rather naive iterative strategy can be accelerated using the accelerated pseudo-transient method [(Räss et al., 2022)](https://doi.org/10.5194/gmd-15-5757-2022). In a nutshell, pseudo-time derivative can also be added to the fluxes turning the system of equations into a damped wave equation. The resulting augmented system of accelerated equations reads:
+
+$$ Rq = q +K~∇P_f ~, $$
+
+$$ \frac{∂q}{∂\tau_q} = -Rq~, $$
+
+$$ RP_f = ∇⋅q -Q_f~, $$
+
+$$ \frac{∂P_f}{∂\tau_p} = -RP_f~. $$
+
+Finding the optimal damping parameter entering the definition of $∂\tau_q$ and $∂\tau_p$ further leads to significant acceleration in the solution procedure.
 
 ## Hands-on I
 Let's get started. In this first hands-on, we will work towards making an efficient iterative GPU solver for the forward steady state flow problem.
@@ -215,10 +225,10 @@ Implement those changes in the [geothermal_2D_gpu_ap.jl](scripts/geothermal_2D_g
 
 These minor changes allow us to use GPU acceleration out of the box. However, one may not achieve optimal performance using array programming on GPUs. The alternative is to use kernel programming.
 
-### ✏️ Task 4: Kernel programming
+### Task 4: Kernel programming
 In GPU computing, "kernel programming" refers to explicitly programming the compute function instead of relying on array broadcasting operations. This permits to explicitly control kernel launch-parameters and to optimise operations inside the compute function to be executed on the GPU, aka kernel.
 
-#### Task 4a: CPU "kernel" programming
+#### ✏️ Task 4a: CPU "kernel" programming
 For a smooth transition, let's go back to our vectorised CPU code, [geothermal_2D.jl](scripts/geothermal_2D.jl). We will now create a version of this code where:
 1. the physics should be isolated into specific compute functions which will then be called in the iterative loop,
 2. we will use nested loops (as one would do in C programming) to express the computations.
@@ -252,9 +262,54 @@ These expression can be called using e.g. `@d_xa(A)` within the code and will be
 
 Once done, run the code, change the number of threads and check out the scaling in terms of wall-time while increasing grid resolution.
 
-#### Task 4b: GPU kernel programming
+#### ✏️ Task 4b: GPU kernel programming
+Now that we have a multi-threaded Julia CPU code with explicitly defined compute functions, we are ready to make the final step, i.e., port the [geothermal_2D_kp.jl](scripts/geothermal_2D_kp.jl) code to GPU using kernel programming.
 
+The main change is to replace the nested loop, which is where the operations are fully or partly serialised (depend on single or multi-threading execution, respectively). The parallel processing power of GPUs come from their ability to execute the compute functions, or kernels, asynchronously on different threads. Assigning a each grid point in our computational domain to a different GPU thread enables massive parallelisation.
 
+The idea is to replace:
+```julia
+function compute_fun!(A, A2)
+    Threads.@threads for iz ∈ axes(A, 2)
+        for ix ∈ axes(A, 1)
+            @inbounds if (ix<=size(A, 1) && iz<=size(A, 2)) A[ix, iz] = A2[ix, iz] end
+        end
+    end
+    return
+end
+```
+by
+```julia
+function compute_fun_d!(A, A2)
+    ix = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    iz = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    @inbounds if (ix<=size(A, 1) && iz<=size(A, 2)) A[ix, iz] = A2[ix, iz] end
+    return
+end
+```
+
+The GPU version of the compute function, `compute_fun_d`, will be executed by each thread on the GPU. The only remaining is to launch the function on as many GPU threads as there are grid points in our computational domain. This step is achieved using the "kernel launch parameters", which define the CUDA block and grid size. The picture below (from [PDE on GPUs](https://pde-on-gpu.vaw.ethz.ch/lecture6/#gpu_architecture_and_kernel_programming)) depicts this concept:
+
+![staggrid](docs/cuda_grid.png)
+
+> :bulb: Playing with GPUs - the rules
+> 
+> - Current GPUs allow typically a maximum of 1024 threads per block.
+> - The maximum number of blocks allowed is huge; computing the largest possible array on the GPU will make you run out of device memory (currently 16-80 GB) before hitting the maximal number of blocks when selecting sensible kernel launch parameters (usually threads per block >= 256).
+> - Threads, blocks and grid have 3D "Cartesian" topology, which is very useful for 1D, 2D and 3D Cartesian finite-difference domains.
+
+Starting from the [geothermal_2D_gpu_kp.jl](scripts/geothermal_2D_gpu_kp.jl) script, add content to the compute functions such that they would execute on the GPU.
+
+Use following kernel launch parameters
+```julia
+nthread = (16, 16)
+nblock  = cld.((nx, nz), nthread)
+```
+and add the following parameters for a GPU kernel launch:
+```julia
+CUDA.@sync @cuda threads=nthread blocks=nblock compute_fun_d!(A, A2)
+```
+Yay :tada:, if you made it here then we are ready to use our efficient GPU-based forward model for optimisation problem.
 ## The optimisation problem
 
 ## Hands-on II
