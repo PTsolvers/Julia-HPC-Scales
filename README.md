@@ -180,14 +180,14 @@ This rather naive iterative strategy can be accelerated using the accelerated ps
 ## Hands-on I
 Let's get started. In this first hands-on, we will work towards making an efficient iterative GPU solver for the forward steady state flow problem.
 
-### Task 1: Steady-state diffusion problem
+### ✏️ Task 1: Steady-state diffusion problem
 The first script we will work on is [geothermal_2D_noacc.jl](scripts/geothermal_2D_noacc.jl). This script builds upon the [visu_2D.jl](scripts/visu_2D.jl) scripts and contains the basic structure of the iterative code and the updated `# numerics` section.
 
 As first task, let's complete the physics section in the iteration loop, replacing `# ???` by actual code.
 
 Once done, let's run the script and briefly check how iteration count normalised by `nx` scales when changing the grid resolution.
 
-### Task 2: The accelerated pseudo-transient method
+### ✏️ Task 2: The accelerated pseudo-transient method
 As you can see, the iteration count does not really scales with increasing grid resolution and the overall iteration count is really large.
 
 To address this issue, we can implement the accelerated pseudo-transient method [(Räss et al., 2022)](https://doi.org/10.5194/gmd-15-5757-2022). Practically, we will define residuals for both x and z fluxes (`Rqx`, `Rqz`) and provide an update rule based on some optimal numerical parameters consistent with the derivations in [(Räss et al., 2022)](https://doi.org/10.5194/gmd-15-5757-2022).
@@ -198,7 +198,7 @@ Let's complete the physics section in the iteration loop, replacing `# ???` with
 
 Run the code and check how the iteration count scales as function of grid resolution.
 
-### Task 3: From CPU to GPU using array programming
+### ✏️ Task 3: From CPU to GPU using array programming
 So far so good, we have an efficient algorithm to iteratively converge the elliptic subsurface flow problem.
 
 The next step is to briefly showcase how to port the vectorised Julia code, using array "broadcasting", to GPU computing using "array programming". As other languages, one way to proceed in Julia is to simply initialise all arrays in GPU memory.
@@ -217,11 +217,42 @@ Implement those changes in the [geothermal_2D_gpu_ap.jl](scripts/geothermal_2D_g
 
 These minor changes allow us to use GPU acceleration out of the box. However, one may not achieve optimal performance using array programming on GPUs. The alternative is to use kernel programming.
 
-### Task 4: Kernel programming
-
+### ✏️ Task 4: Kernel programming
+In GPU computing, "kernel programming" refers to explicitly programming the compute function instead of relying on array broadcasting operations. This permits to explicitly control kernel launch-parameters and to optimise operations inside the compute function to be executed on the GPU, aka kernel.
 
 #### Task 4a: CPU "kernel" programming
-Actually using multi-threading
+For a smooth transition, let's go back to our vectorised CPU code, [geothermal_2D.jl](scripts/geothermal_2D.jl). We will now create a version of this code where:
+1. the physics should be isolated into specific compute functions which will then be called in the iterative loop,
+2. we will use nested loops (as one would do in C programming) to express the computations.
+
+The general design of a compute function looks as following
+```julia
+function compute_fun!(A, A2)
+    Threads.@threads for iz ∈ axes(A, 2)
+        for ix ∈ axes(A, 1)
+            @inbounds if (ix<=size(A, 1) && iz<=size(A, 2)) A[ix, iz] = A2[ix, iz] end
+        end
+    end
+    return
+end
+```
+
+Note that for analogy with GPU computing, we perform the bound-checking using an `if` statement inside the nested loops and not use the loop ranges.
+
+Julia offers "native" support for multi-threading. To use it, simply decorate the outer loop with `Threads.@threads` and launch Julia with the `-t auto` or `-t 4` flag (for selecting max available or 4 threads, respectively). In VScode Julia extension settings, you can also specify the amount of threads to use.
+
+The `@inbounds` macro deactivates bound-checking and results in better performance. Note that is recommended to only use it once you have verified the code produces correct results, else you may get a segmentation fault.
+
+Start from the [geothermal_2D_kp.jl](scripts/geothermal_2D_kp.jl) code and finalise it replacing the `# ???` with more valid content. Note that we introduces macros to perform derivatives and averaging in a point-wise fashion:
+```julia
+macro d_xa(A) esc(:($A[ix+1, iz] - $A[ix, iz])) end
+macro d_za(A) esc(:($A[ix, iz+1] - $A[ix, iz])) end
+macro avx(A)  esc(:(0.5 * ($A[ix, iz] + $A[ix+1, iz]))) end
+macro avz(A)  esc(:(0.5 * ($A[ix, iz] + $A[ix, iz+1]))) end
+```
+These expression can be called using e.g. `@d_xa(A)` within the code and will be replaced by the preprocessor before compilation.
+
+Once done, run the code, change the number of threads and check out the scaling in terms of wall-time while increasing grid resolution.
 
 #### Task 4b: GPU kernel programming
 
