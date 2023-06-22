@@ -151,7 +151,7 @@ The corresponding system of equation reads:
 
 $$ q = -K~∇P_f ~, $$
 
-$$ 0 = ∇⋅q -Q_f~, $$
+$$ 0 = -∇⋅q + Q_f~, $$
 
 where $q$ is the diffusive flux, $P_f$ the fluid pressure, $K$ is the spatially variable diffusion coefficient, and $Q_f$ the source term.
 
