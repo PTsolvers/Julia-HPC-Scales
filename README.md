@@ -51,7 +51,7 @@ The main Julia packages we will rely on are:
 - [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) for GPU computing on Nvidia GPUs
 - [Enzyme.jl](https://github.com/EnzymeAD/Enzyme.jl) for AD on GPUs
 - [CairoMakie.jl](https://github.com/MakieOrg/Makie.jl) for plotting
-- [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl) to extend the vanilla gradient-descent procedure
+- [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl) to extend the "vanilla" gradient-descent procedure
 
 Most of the workshop is based on "hands-on". Changes to the scripts are incremental and should allow to build up complexity throughout the day. Blanked-out scripts for most of the steps are available in the [scripts](scripts/) folder. Solutions scripts (following the `s_xxx.jl` pattern) will be shared at some point in the [scripts_solutions](scripts_solutions) folder.
 
@@ -117,7 +117,7 @@ q[ix] = -D * (A[ix+1] - A[ix]) / dx
 ```
 consists of:
 - 1 read (`A`) + 1 write (`q`) => $2 × 8$ = **16 Bytes transferred**
-- 2 (fused) addition and multiplication => **2 floating point operations**
+- 1 addition + 1 multiplication + 1 division => **3 floating point operations**
 
 👉 assuming $D$, $∂x$ are scalars, $q$ and $A$ are arrays of `Float64` (read from main memory)
 
@@ -132,7 +132,7 @@ $$ ∇⋅(D ∇ C) = \frac{∂C}{∂t} $$
 
 ### Why to still bother with GPU computing in 2023
 Because it is still challenging. Why?
-- Very few software uses it efficiently.
+- Very few codes use it efficiently.
 - It requires to rethink the solving strategy as non-local operations will kill the fun.
 
 ## The challenge of today
@@ -140,12 +140,12 @@ The goal fo today is to solve a subsurface flow problem related to injection and
 
 ![model setup](docs/model_setup.png)
 
-Although on the vanilla side, this problem presents several challenges to be solved efficiently. We will need to achieve:
-- an efficient steady-state solve of an elliptic equation
+Despite looking simple, this problem presents several challenges to be solved efficiently. We will need to:
+- efficiently solve an elliptic equation for the pressure
 - handle source terms
 - handle spatially variable material parameters
 
-> :bulb: For practical purpose, we will work in 2D, however everything we will develop today is readily extensible to 3D.
+> :bulb: For practical purposes, we will work in 2D, however everything we will develop today is readily extensible to 3D.
 
 The corresponding system of equation reads:
 
@@ -186,7 +186,7 @@ As first task, let's complete the physics section in the iteration loop, replaci
 Once done, let's run the script and briefly check how iteration count normalised by `nx` scales when changing the grid resolution.
 
 ### ✏️ Task 2: The accelerated pseudo-transient method
-As you can see, the iteration count does not really scales with increasing grid resolution and the overall iteration count is really large.
+As you can see, the iteration count scales quadratically with increasing grid resolution and the overall iteration count is really large.
 
 To address this issue, we can implement the accelerated pseudo-transient method [(Räss et al., 2022)](https://doi.org/10.5194/gmd-15-5757-2022). Practically, we will define residuals for both x and z fluxes (`Rqx`, `Rqz`) and provide an update rule based on some optimal numerical parameters consistent with the derivations in [(Räss et al., 2022)](https://doi.org/10.5194/gmd-15-5757-2022).
 
