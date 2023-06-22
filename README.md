@@ -161,7 +161,7 @@ We will use an accelerated iterative solving strategy combined to a finite-diffe
 
 The iterative approach relies in replacing the 0 in the mass balance equation by a pseudo-time derivative $∂/∂\tau$ and let it reach a steady state:
 
-$$ \frac{∂P_f}{∂\tau} = ∇⋅q -Q_f~. $$
+$$ \frac{∂P_f}{∂\tau} = -∇⋅q + Q_f~. $$
 
 Introducing the residual $RP_f$, one can re-write the system of equations as:
 
