@@ -1,14 +1,12 @@
 # Julia-HPC-Scales
 Julia for HPC workshop @ [**SCALES conference 2023**](https://model.uni-mainz.de/scales-conference-2023/)
 
-> :warning: Make sure to `git pull` this repo right before starting the workshop on Monday morning in order to ensure you have access to the latest updates
-
 | The computational resources for this workshop are provided by the      |                |
 | :------------: | :------------: |
 | [**Paderborn Center for Parallel Computing (PC2)**](https://pc2.uni-paderborn.de/) | [![PC2](docs/Logo_PC2_rgb.jpg)](https://pc2.uni-paderborn.de/) |
 | **PC2** is a member of the [**NHR Alliance**](https://www.nhr-verein.de/) | [![out visu](docs/NHR_logo.png)](https://www.nhr-verein.de/) |
 
-
+> :warning: Make sure to `git pull` this repo right before starting the workshop on Monday morning in order to ensure you have access to the latest updates
 
 ## Program
 
@@ -47,7 +45,7 @@ The goal of today's workshop is to develop a fast iterative GPU-based solver for
 1. Solve a steady state subsurface flow problem (geothermal operations, injection and extraction of fluids)
 2. Invert for the subsurface permeability having a sparse array of fluid pressure observations
 
-We will not use any "black-box" tooling but rather try to develop concise and performant codes (300 loc max) that execute on GPUs. We will also use automatic differentiation (AD) capabilities and the differentiable Julia stack to automatise the calculation of the adjoint solutions in the gradient-based inversion procedure.
+We will not use any "black-box" tooling but rather try to develop concise and performant codes (300 lines of code, max) that execute on GPUs. We will also use automatic differentiation (AD) capabilities and the differentiable Julia stack to automatise the calculation of the adjoint solutions in the gradient-based inversion procedure.
 
 The main Julia packages we will rely on are:
 - [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) for GPU computing on Nvidia GPUs
@@ -64,7 +62,7 @@ Most of the workshop is based on "hands-on". Changes to the scripts are incremen
 - Julia Slack (Julia dev chat): [https://julialang.org/slack/](https://julialang.org/slack/)
 
 ## VSCode on Noctua 2
-Before we start, let's make sure that everyone can remote connect over SSH to a GPU node on the **Noctua 2** supercomputer we will use today.
+Before we start, let's make sure that everyone can remote connect over SSH from within [VSCode](https://code.visualstudio.com/docs/remote/ssh) to a GPU node on the **Noctua 2** supercomputer we will use today.
 
 Let's go back to the email titled "**SCALES workshop - login credentials**" in order to access the HackMD doc to go through the "**VSCode on the Compute Node (on Monday only)**" procedure.
 
