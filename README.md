@@ -324,39 +324,33 @@ In the following, we will refer to the model that maps the permeability to the p
 
 Let's define the results of the forward model as the mapping $\mathcal{L}$ between the subsurface permeability field $K$ and the two fields: the pressure $P$ and the flux $\boldsymbol{q}$. To describe this mapping, we use the fact that the solution to the system of the governing equations for the pressure makes the residual $R$ to be equal to zero:
 
-$$ \mathcal{L}: K \rightarrow \{\boldsymbol{q}, P_f\}\quad | \quad R(\{\boldsymbol{q}, P_f\}, K) = 0. $$
+$$\mathcal{L}: K \rightarrow \{\boldsymbol{q}, P_f\}\quad | \quad R(\{\boldsymbol{q}, P_f\}, K) = 0.$$
 
 The residual of the problem is a vector containing the left-hand side of the system of governing equations, written in a such a form in which the right-hand side is $0$:
 
-$$
-R(\{\boldsymbol{q}, P_f\}, K) = \left( \begin{gathered}
+$$R(\{\boldsymbol{q}, P_f\}, K) = \left( \begin{gathered}
 R_q\\
 R_{P_f}
 \end{gathered}\right) = \left(\begin{gathered}
 q + K\nabla P_f\\
 \nabla\cdot\boldsymbol{q} - Q_f
-\end{gathered}\right)
-$$
+\end{gathered}\right)$$
 
 To quantify the discrepancy between the results of the forward model $\mathcal{L}$ and the observations $\mathcal{L}_\mathrm{obs}$, we introduce the _objective function_ $J$, which in the simplest case can be defined as:
 
-$$
-J(\mathcal{L}(K); \mathcal{L}_\mathrm{obs}) = \frac{1}{2}\int_\Omega\left[\mathcal{L}(K) - \mathcal{L}_\mathrm{obs}\right]^2\,\mathrm{d}\Omega~,
-$$
+$$J(\mathcal{L}(K); \mathcal{L}_\mathrm{obs}) = \frac{1}{2}\int_\Omega\left[\mathcal{L}(K) - \mathcal{L}_\mathrm{obs}\right]^2\,\mathrm{d}\Omega~,$$
 where $\Omega$ is the computational domain.
 
 The goal of the inverse modelling is to find such a distribution of the parameter $K$ which minimises the objective function $J$:
 
-$$
-K = \argmin_K J(\mathcal{L}(K); \mathcal{L}_\mathrm{obs})~.
-$$
+$$K = \argmin_K J(\mathcal{L}(K); \mathcal{L}_\mathrm{obs})~.$$
 
 Therefore, the inverse modelling is tightly linked to the field of mathematical optimization. Numerous methods of finding the optimal value of $K$ exist, but in this workshop we will focus on _gradient-based_ methods. One of the simplest gradient-based method is the method of _the gradient descent_.
 
 ### Gradient descent
 The simple way to find the local minimum of the function $J$ is to start from some initial distribution $K^0$ and to update it iteratively, stepping in the direction of the steepest descent of the objective function $J$, given by its gradient:
 
-$$ K^{n+1} = K^n - \gamma \left.\frac{\mathrm{d}J}{\mathrm{d}K}\right|_{K=K^n} $$
+$$K^{n+1} = K^n - \gamma \left.\frac{\mathrm{d}J}{\mathrm{d}K}\right|_{K=K^n}$$
 
 To update $K$, one needs to be able to evaluate the gradient of the objective function $\mathrm{d}J/\mathrm{d}K$. The tricky part here is that evaluating the objective function $J$ itself involves a forward model solve $\mathcal{L}(K)$. The naive approach is to approximate the gradient by finite differences, which requires perturbing the values of $K$ at each grid point and evaluating the objective function $J$. If the computational domain is discretised into $N = n_x \times n_y$ grid points, computing the gradient requires $N$ forward solves, which is prohibitively expensive even at relatively low resolution. Fortunately, there is a neat mathematical trick which allows evaluating gradient $\mathrm{d}J/\mathrm{d}K$ in only one extra linear solve, called _the adjoint state method_.
 
@@ -368,9 +362,7 @@ The objective function $J$ is a function of the solution $\mathcal{L}$, which de
 <td style="width: 10000px;"></td>
 <td>
 
-$$
-\frac{\mathrm{d}J}{\mathrm{d}K} = \frac{\partial J}{\partial \mathcal{L}}\frac{\mathrm{d}\mathcal{L}}{\mathrm{d}K} + \frac{\partial J}{\partial K}~.
-$$
+$$\frac{\mathrm{d}J}{\mathrm{d}K} = \frac{\partial J}{\partial \mathcal{L}}\frac{\mathrm{d}\mathcal{L}}{\mathrm{d}K} + \frac{\partial J}{\partial K}~.$$
 
 </td>
 <td style="width: 10000px; text-align: right;">(1)</td>
@@ -387,9 +379,7 @@ Note that the solution $\mathcal{L}$ is a vector containing the fluxes $\boldsym
 <td style="width: 10000px;"></td>
 <td>
 
-$$
-\frac{\partial J}{\partial \mathcal{L}}\frac{\mathrm{d}\mathcal{L}}{\mathrm{d}K} = \frac{\partial J}{\partial \boldsymbol{q}}\frac{\mathrm{d}\boldsymbol{q}}{\mathrm{d}K} + \frac{\partial J}{\partial P_f}\frac{\mathrm{d}P_f}{\mathrm{d}K}~.
-$$
+$$\frac{\partial J}{\partial \mathcal{L}}\frac{\mathrm{d}\mathcal{L}}{\mathrm{d}K} = \frac{\partial J}{\partial \boldsymbol{q}}\frac{\mathrm{d}\boldsymbol{q}}{\mathrm{d}K} + \frac{\partial J}{\partial P_f}\frac{\mathrm{d}P_f}{\mathrm{d}K}~.$$
 
 </td>
 <td style="width: 10000px; text-align: right;">(2)</td>
@@ -397,15 +387,12 @@ $$
 
 To compute this tricky term, we note that the solution to the forward problem nullifies the residual $R$. Since both $R_q=0$ and $R_{P_f}=0$ for any solution $\{\boldsymbol{q}, P_f\}$, the total derivative of $R_q$ and $R_{P_f}$ w.r.t. $K$ should be also $0$:
 
-$$
-\frac{\mathrm{d} R_l}{\mathrm{d}K} = \frac{\partial R_l}{\partial \boldsymbol{q}}\frac{\mathrm{d}\boldsymbol{q}}{\mathrm{d}K} + \frac{\partial R_l}{\partial P_f}\frac{\mathrm{d}P_f}{\mathrm{d}K} + \frac{\partial R_l}{\partial K} = 0,\quad l \in \{\boldsymbol{q}, P_f\}~.
-$$
+$$\frac{\mathrm{d} R_l}{\mathrm{d}K} = \frac{\partial R_l}{\partial \boldsymbol{q}}\frac{\mathrm{d}\boldsymbol{q}}{\mathrm{d}K} + \frac{\partial R_l}{\partial P_f}\frac{\mathrm{d}P_f}{\mathrm{d}K} + \frac{\partial R_l}{\partial K} = 0,\quad l \in \{\boldsymbol{q}, P_f\}~.$$
 
 
 This is the system of equations which could be solved for $\mathrm{d}\boldsymbol{q}/\mathrm{d}K$ and $\mathrm{d}P_f/\mathrm{d}K$. It useful to recast this system into a matrix form. Defining $R_{f,g} = \partial R_f/\partial g$ we obtain:
 
-$$
-\begin{pmatrix}
+$$\begin{pmatrix}
 \dfrac{\partial R_{\boldsymbol{q}}}{\partial\boldsymbol{q}} & \dfrac{\partial R_{\boldsymbol{q}}}{\partial P_f} \\
 \dfrac{\partial R_{P_f}}{\partial\boldsymbol{q}} & \dfrac{\partial R_{P_f}}{\partial P_f}
 \end{pmatrix}
@@ -417,8 +404,7 @@ $$
 - \begin{pmatrix}
 \dfrac{\partial R_{\boldsymbol{q}}}{\partial K}\vphantom{\dfrac{\partial R_{P_f}}{\partial P_f}} \\
 \dfrac{\partial R_{P_f}}{\partial K}\vphantom{\dfrac{\partial R_{P_f}}{\partial P_f}}
-\end{pmatrix}
-$$
+\end{pmatrix}$$
 
 One could solve this system of equations to compute the derivatives. However, the sizes of the unknowns $\mathrm{d}\boldsymbol{q}/\mathrm{d}K$ and $\mathrm{d}P_f/\mathrm{d}K$ are $N_{\boldsymbol{q}}\times N_K$ and $N_{P_f}\times N_K$, respectively. Recalling that in 2D number of grid points is $N = n_x\times n_y$, we can estimate that $N_{\boldsymbol{q}} = 2N$ since the vector field has 2 components in 2D, and $N_K = N$. Solving this system would be equivalent to the direct perturbation method, and is prohibitively expensive.
 
@@ -428,8 +414,7 @@ Luckily, we are only interested in evaluating the obejective function gradient (
 <td style="width: 10000px;"></td>
 <td>
 
-$$
-\begin{pmatrix}
+$$\begin{pmatrix}
 \dfrac{\partial R_{\boldsymbol{q}}}{\partial\boldsymbol{q}}^\mathrm{T} & \dfrac{\partial R_{P_f}}{\partial\boldsymbol{q}}^\mathrm{T} \\
  \dfrac{\partial R_{\boldsymbol{q}}}{\partial P_f}^\mathrm{T} & \dfrac{\partial R_{P_f}}{\partial P_f}^\mathrm{T}
 \end{pmatrix}
@@ -441,8 +426,7 @@ $$
 \begin{pmatrix}
 \dfrac{\partial J}{\partial \boldsymbol{q}}^\mathrm{T}\vphantom{\dfrac{\partial R_{P_f}}{\partial P_f}} \\
 \dfrac{\partial J}{\partial P_f}^\mathrm{T}\vphantom{\dfrac{\partial R_{P_f}}{\partial P_f}}
-\end{pmatrix}
-$$
+\end{pmatrix}$$
 
 </td>
 <td style="width: 10000px; text-align: right;">(3)</td>
@@ -450,8 +434,7 @@ $$
 
 The sizes of the unknowns $\Psi_{\boldsymbol{q}}$ and $\Psi_{P_f}$ are $N_{\boldsymbol{q}}\times 1$ and $N_{P_f}\times 1$, respectively. Therefore, solving the adjoint equation involves only one linear solve! The "tricky term" in the objective function gradient could be then easily computed. This is most evident if we recast the equation (2) into the matrix form:
 
-$$
-\begin{split}
+$$\begin{split}
 \frac{\partial J}{\partial \mathcal{L}}\frac{\mathrm{d}\mathcal{L}}{\mathrm{d}K} &= 
 \begin{pmatrix}
 \dfrac{\partial J}{\partial \boldsymbol{q}} & \dfrac{\partial J}{\partial P_f}
@@ -482,16 +465,14 @@ $$
 \end{pmatrix}
 =
 - \Psi_{\boldsymbol{q}}^\mathrm{T}\dfrac{\partial R_{\boldsymbol{q}}}{\partial K} - \Psi_{P_f}^\mathrm{T}\dfrac{\partial R_{P_f}}{\partial K}~.
-\end{split}
-$$
+\end{split}$$
 
 Phew, there is a lot to process :sweat_smile:! We now established a very efficient way of computing point-wise gradients of the objective function. Now, we only need to figure out how to solve the adjoint equation (3).
 
 ### Pseudo-transient adjoint solver
 In the same way that we solve the steady-state forward problem by integrating the equations given by residual $R$ in pseudo-time, we can augment the system (3) with the pseudo-time derivatives of the adjoint variables $\Psi_{\boldsymbol{q}}$ and $\Psi_{P_f}$:
 
-$$
-\begin{pmatrix}
+$$\begin{pmatrix}
 \dfrac{\partial \Psi_{\boldsymbol{q}}}{\partial \tau}\vphantom{\dfrac{\partial R_{P_f}}{\partial P_f}} \\
 \dfrac{\partial \Psi_{P_f}}{\partial \tau}\vphantom{\dfrac{\partial R_{P_f}}{\partial P_f}}
 \end{pmatrix}
@@ -508,8 +489,7 @@ $$
 \begin{pmatrix}
 \dfrac{\partial J}{\partial \boldsymbol{q}}^\mathrm{T}\vphantom{\dfrac{\partial R_{P_f}}{\partial P_f}} \\
 \dfrac{\partial J}{\partial P_f}^\mathrm{T}\vphantom{\dfrac{\partial R_{P_f}}{\partial P_f}}
-\end{pmatrix}
-$$
+\end{pmatrix}$$
 
 With this approach, we never need to explicitly store the matrix of the adjoint problem. Instead, we only need to evaluate the product of this matrix and the adjoint variables at the current iteration in pseudo-time. It is very similar to just computing the residuals of the current forward solution.
 
