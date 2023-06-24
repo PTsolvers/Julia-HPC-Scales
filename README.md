@@ -33,9 +33,8 @@ Julia for HPC workshop @ [**SCALES conference 2023**](https://model.uni-mainz.de
   - GPU-based adjoint solver using [Enzyme.jl](https://github.com/EnzymeAD/Enzyme.jl)
   - Sensitivity analysis
   - Gradient-based inversion (Gradient descent - GD)
-    - Vanilla GD by hand
-    - Using [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl)
-- [**Exercises** (optional) :computer:](#exercises-optionnal)
+- [**Optional exercises** :computer:](#optional-exercises)
+  - Use [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl)
   - Go for 3D
   - Make combined loss (pressure + flux)
 - **Wrapping up** & outlook :beer:
@@ -757,11 +756,11 @@ Congratulations :tada:, you successfully implemented the full inversion algorith
 
 ## Optional exercises
 
-### Use Optim.jl instead of manual gradient descent
+### 1. Use Optim.jl instead of manual gradient descent
 
 The functions `J` and `∇J!` now compute the loss function and its gradient in a black-box fashion. That means that we could replace our manually implemented gradient descent loop with a robust implementation of a production-level gradient-based optimisation algorithm. Many such algorithms are implemented in the package [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl). Implementations in Optim.jl include automatic search for the step size (`γ` in our code), and improved search directions for faster convergence then just the direction of the steepest descent.
 
-Replace the gradient descent loop with a call to the function `optimize` from Optim.jl. Refer to the [documentation of `Optim.jl`](https://julianlsolvers.github.io/Optim.jl/stable/#user/minimization/) for the details. Use the `LBFGS` optimizer with the following options:
+Replace the gradient descent loop with a call to the function `optimize` from Optim.jl. Refer to the [documentation of Optim.jl](https://julianlsolvers.github.io/Optim.jl/stable/#user/minimization/) for the details. Use the `LBFGS` optimizer with the following options:
 
 ```julia
 opt = Optim.Options(
