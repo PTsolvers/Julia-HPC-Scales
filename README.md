@@ -688,7 +688,7 @@ We will extract the code for solving the forward and adjoint problems into separ
 In this workshop, we will match only the "observed" pressure field $P_f$ for simplicity, meaning that the objective function only depends on the pressure:
 
 $$
-J(P_f(K); {P_f}_\mathrm{obs}) = \frac{1}{2}\int_\Omega\left[P_f(K) - {P_f}_\mathrm{obs}\right]^2\,\mathrm{d}\Omega~,
+J(P_f(K); P_\mathrm{obs}) = \frac{1}{2}\int_\Omega\left[P_f(K) - P_\mathrm{obs}\right]^2\,\mathrm{d}\Omega~,
 $$
 
 As an optional exercise, you can implement different formulation to invert for fluxes $\boldsymbol{q}$ instead, or combine both pressures and fluxes with different weights.
