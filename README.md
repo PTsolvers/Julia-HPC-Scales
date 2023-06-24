@@ -654,6 +654,8 @@ The adjoint solver is also "transposed" compared to the forward one, which means
 CUDA.@sync @cuda threads=nthread blocks=nblock update_pressure!(...)
 ```
 
+The optimal iteration parameters for the pseudo-transient algorithm are different for the forward and the adjoint problems. The optimal iteration parameter for the forward problem is stored in the variable `re`, and the one for the adjoint problem is stored in the variable `re_a`. Make sure to use the correct variable when updating the adjoint solution, otherwise the convergence will be very slow.
+
 > This explanation may sound incomplete, which is definitely true. To better understand why the functions are in such a mixed order, we recommend reading the section `Introduciton into inverse modelling` in this README, and to learn a bit more about AD, for example, in the [SciML book](https://book.sciml.ai/notes/10-Basic_Parameter_Estimation-Reverse-Mode_AD-and_Inverse_Problems/).
 
 Finally, we also need to implement the boundary condition handling for the adjoint problem, but to keep the presentation short, instead of implementing the separate kernels for that we just computed the JVPs analytically for particular choice of BCs.=:
@@ -671,7 +673,7 @@ $$
 \frac{\mathrm{d}J}{\mathrm{d}K} = - \Psi_{\boldsymbol{q}}^\mathrm{T}\dfrac{\partial R_{\boldsymbol{q}}}{\partial K} - \Psi_{P_f}^\mathrm{T}\dfrac{\partial R_{P_f}}{\partial K} + \frac{\partial J}{\partial K} = - \Psi_{\boldsymbol{q}}^\mathrm{T}\dfrac{\partial R_{\boldsymbol{q}}}{\partial K}~.
 $$
 
-Here we use the fact that in this problem, $\partial J/\partial K = 0$ and $\partial R_{P_f}/\partial K = 0$.
+Here we use the fact that in our case $\partial J/\partial K = 0$ and $\partial R_{P_f}/\partial K = 0$.
 
 Note that the right-hand side of this equation is exactly the vector-Jacobian product, which can be easily computed with AD. Use the function `∇_residual_fluxes_s!` that you've implemented earlier.
 
@@ -679,7 +681,128 @@ Congrats, now you can compute the point-wise sensitivities! We have all the buil
 
 ### ✏️ Task 2: Inversion
 
+In this excercise, we will implement the gradient descent algorithm to progressively update the permeability $K$ using the gradient of the objective function to match the synthetically generated "observed" pressure field.
+
+We will extract the code for solving the forward and adjoint problems into separate functions, and then wrap the adjoint solver in a loop for gradient descent.
+
+In this workshop, we will match only the "observed" pressure field $P_f$ for simplicity, meaning that the objective function only depends on the pressure:
+
+$$
+J(P_f(K); {P_f}_\mathrm{obs}) = \frac{1}{2}\int_\Omega\left[P_f(K) - {P_f}_\mathrm{obs}\right]^2\,\mathrm{d}\Omega~,
+$$
+
+As an optional exercise, you can implement different formulation to invert for fluxes $\boldsymbol{q}$ instead, or combine both pressures and fluxes with different weights.
+
+#### Task 2a: refactor the code by extracting the forward and inverse solvers into the 
+
+Start from the file [geothermal_2D_gpu_kp_ad_inv.jl](scripts/geothermal_2D_gpu_kp_ad_inv.jl). You can copy the implementations of all the kernels from the previous file with the sensitivity computation.
+
+Note that there is one additional kernel `smooth_d!` in this file. This kernel smoothes the input field using several steps of diffusion. We wil use this kernel to implement the regularization of the inverse problem. In lay terms, we prevent the inverted permeability field from having sharp gradients. The reasons why it is needed and the derivation of the regularization terms are beyond the scope of this workshop.
+
+You can find two new functions, `forward_solve!` and `adjoint_solve!`. This functions contain all the functionality required for computing the forward and inverse problem, respectively. You can simply copy the missing initialisation of the adjoint fields, kernel calls, and boundary conditions from the previous code.
+
+When you're done, call the forward solve in the main function after the line `@info "Synthetic solve"`:
+
+```julia
+@info "Synthetic solve"
+forward_solve!(logK, fwd_params...; visu=fwd_visu)
+```
+
+The `...` syntax in Julia means that we expand the named tuple into the comma-separated list of function arguments. We also make visualisation optional, to avoid excessive plotting in the inverse solver.
+
+You can temporarily comment the rest of the code and run it to make sure that it works.
+
+> Note that we pass the logarithm of permeability  $K$ into both the forward and adjoint solvers. This is necessary since the permeability in the barrier is 6 orders of magnitude lower that that of the surrounding subsurface. This is characteristic for the Earth's crust. Using the logarithm of the permeability as the control variable makes the inversion procedure much more robust, and avoids accidentally making the permeability negative, with would result in instability.
+
+#### Task 2b: implementing objective function and its gradient
+
+We have two more new functions in the file [geothermal_2D_gpu_kp_ad_inv.jl](scripts/geothermal_2D_gpu_kp_ad_inv.jl), namely `loss` and `∇loss!`. "Loss" is just another name for the objective function (which is also often called the "cost function"). It is obvious that in order to evaluate the loss function, one has to run the forward solver, and to evaluate the gradient, one needs to make the forward solve, followed by adjoint solve, and finally evaluate the gradient. Replace the `#= ??? =#` with corresponding calls to the forward and adjoint solvers, and finally the `∇_residual_fluxes_s!` function.
+
+In real world, the observations are sparse. We try to mimic this sparseness by saving only a subset of the synthetic solve results. We introduce the ranges containinng the coordinates of observations:
+
+```julia
+# observations
+xobs_rng = LinRange(-lx / 6, lx / 6, 8)
+zobs_rng = LinRange(0.25lz, 0.85lz , 8)
+```
+
+Then compute the indices of the grid cells corresponding to these locations:
+
+```julia
+ixobs    = floor.(Int, (xobs_rng .- xc[1]) ./ dx) .+ 1
+izobs    = floor.(Int, (zobs_rng .- zc[1]) ./ dz) .+ 1
+```
+
+And finally, store only the pressures at these locations after the synthetic solve:
+
+```julia
+@info "Synthetic solve"
+#= ??? =#
+# store true data
+Pf_obs = copy(Pf[ixobs, izobs])
+```
+
+As we'll see, the quality of inversions is significantly affected by the availability of the data.
+
+Compared to the sensitivity analysis, the objective function is now has quadratic terms in pressure, which means that $\partial J/\partial P_f = 1$ is no longer true. Try to calculate analytically the correct value for `∂J_∂Pf` in the function `∇loss!`:
+
+```julia
+∂J_∂Pf[ixobs, izobs] .= #= ??? =#
+```
+
+If in doubt, search the introduction for the answer :smirk:.
+
+Try to execute the functions `loss` and `∇loss!` in the code to make sure your implementation works as expected.
+
+#### Task 2c: implement the gradient descent
+We can use the functions `loss` and `∇loss!` to iteratively update the permeability. We introduce the following shortcuts using the Julia [closures syntax](https://docs.julialang.org/en/v1/devdocs/functions/#Closures):
+
+```julia
+J(_logK) = loss(_logK, fwd_params, loss_params)
+∇J!(_logK̄, _logK) = ∇loss!(_logK̄, _logK, fwd_params, adj_params, loss_params; reg)
+```
+
+Now we need to initialise the permeability field with some value different from the correct answer. Here we just remove the low-permeability barrier:
+
+```julia
+K    .= k0_μ
+logK .= log.(K)
+```
+
+Inside the gradient descent loop, we adaptively compute the step size `γ` in such a way that the change in the control variable `logK` has a defined characteristic magnitude:
+
+```julia
+γ = Δγ / maximum(abs.(dJ_dlogK))
+```
+
+Complete the gradient descent loop: compute the loss function gradient using the function `∇J!`, and then update the logarithm of permeability using the computed gradient. Look in the introduction section for help.
+
+Congratulations, you successfully implemented the full inversion algorithm! Despite being very simple and not robust enough, the algorithm reproduces the approximate location and the shape of the low-permeability barrier.
+
 ## Optional exercises
 
 ### Use `Optim.jl` instead of manual gradient descent
 
+The functions `J` and `∇J!` now compute the loss function and its gradient in a black-box fashion. That means that we could replace our manually implemented gradient descent loop with a robust implementation of a production-level gradient-based optimisation algorithm. Many such algorithms are implemented in the package `Optim.jl`. Implementations in `Optim.jl` include automatic search for the step size (`γ` in our code), and improved search directions for faster convergence then just the direction of the steepest descent.
+
+Replace the gradient descent loop with a call to the function `optimize` from `Optim.jl`. Refer to the [documentation of `Optim.jl`](https://julianlsolvers.github.io/Optim.jl/stable/#user/minimization/) for the details. Use the `LBFGS` optimizer with the following options:
+
+```julia
+opt = Optim.Options(
+    f_tol      = 1e-2,
+    g_tol      = 1e-6,
+    iterations = 20,
+    store_trace=true, show_trace=true,
+)
+```
+
+and then retrieve the convergence history:
+
+```julia
+errs_evo = Optim.f_trace(result)
+errs_evo ./= errs_evo[1]
+iters_evo = 1:length(errs_evo)
+plt.err[1] = Point2.(iters_evo, errs_evo)
+```
+
+Compare the convergence rate between your implementation of gradient descent and the one from `Optim.jl`.
