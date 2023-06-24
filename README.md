@@ -33,9 +33,8 @@ Julia for HPC workshop @ [**SCALES conference 2023**](https://model.uni-mainz.de
   - GPU-based adjoint solver using [Enzyme.jl](https://github.com/EnzymeAD/Enzyme.jl)
   - Sensitivity analysis
   - Gradient-based inversion (Gradient descent - GD)
-    - Vanilla GD by hand
-    - Using [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl)
-- [**Exercises** (optional) :computer:](#exercises-optionnal)
+- [**Optional exercises** :computer:](#optional-exercises)
+  - Use [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl)
   - Go for 3D
   - Make combined loss (pressure + flux)
 - **Wrapping up** & outlook :beer:
@@ -480,7 +479,7 @@ In this section, we will implement the gradient-based inversion algorithm for th
 ### Task 1: Adjoint sensitivity
 Before implementing the full inversion algorithm, we will learn how to compute the sensitivity of the solution with respect to changes in permeability. This is a useful building block in inverse modelling.
 
-To quantify the sensitivity, we will use the "sensitivity kernel" definition from [Reuber 2021](https://link.springer.com/article/10.1007/s13137-021-00186-y), which defines it as the derivative of the convolution of the the parameter of interest with unity. In this case, we will only compute the sensitivity of the pressure:
+To quantify the sensitivity, we will use the "sensitivity kernel" definition from [Reuber (2021)](https://link.springer.com/article/10.1007/s13137-021-00186-y), which defines it as the derivative of the convolution of the the parameter of interest with unity. In this case, we will only compute the sensitivity of the pressure:
 
 $$
 J(P_f) = \int_\Omega P_f\,\mathrm{d}\Omega~.
@@ -568,7 +567,7 @@ CUDA.@sync @cuda threads=nthread blocks=nblock update_pressure!(...)
 
 The optimal iteration parameters for the pseudo-transient algorithm are different for the forward and the adjoint problems. The optimal iteration parameter for the forward problem is stored in the variable `re`, and the one for the adjoint problem is stored in the variable `re_a`. Make sure to use the correct variable when updating the adjoint solution, otherwise the convergence will be very slow.
 
-> This explanation may sound incomplete, which is definitely true. To better understand why the functions are in such a mixed order, we recommend reading the section `Introduction into inverse modelling` in this README, and to learn a bit more about AD, for example, in the [SciML book](https://book.sciml.ai/notes/10-Basic_Parameter_Estimation-Reverse-Mode_AD-and_Inverse_Problems/).
+> This explanation may sound incomplete, which is definitely true. To better understand why the functions are in such a mixed order, we recommend reading the section **Introduction into inverse modelling ([dropdown](#introduction))** in this README, and to learn a bit more about AD, for example, in the [SciML book](https://book.sciml.ai/notes/10-Basic_Parameter_Estimation-Reverse-Mode_AD-and_Inverse_Problems/).
 
 Finally, we also need to implement the boundary condition handling for the adjoint problem, but to keep the presentation short, instead of implementing the separate kernels for that we just computed the JVPs analytically for particular choice of BCs.=:
 
@@ -693,11 +692,11 @@ Congratulations :tada:, you successfully implemented the full inversion algorith
 
 ## Optional exercises
 
-### Use Optim.jl instead of manual gradient descent
+### 1. Use Optim.jl instead of manual gradient descent
 
 The functions `J` and `∇J!` now compute the loss function and its gradient in a black-box fashion. That means that we could replace our manually implemented gradient descent loop with a robust implementation of a production-level gradient-based optimisation algorithm. Many such algorithms are implemented in the package [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl). Implementations in Optim.jl include automatic search for the step size (`γ` in our code), and improved search directions for faster convergence then just the direction of the steepest descent.
 
-Replace the gradient descent loop with a call to the function `optimize` from Optim.jl. Refer to the [documentation of `Optim.jl`](https://julianlsolvers.github.io/Optim.jl/stable/#user/minimization/) for the details. Use the `LBFGS` optimizer with the following options:
+Replace the gradient descent loop with a call to the function `optimize` from Optim.jl. Refer to the [documentation of Optim.jl](https://julianlsolvers.github.io/Optim.jl/stable/#user/minimization/) for the details. Use the `LBFGS` optimizer with the following options:
 
 ```julia
 opt = Optim.Options(
