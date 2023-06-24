@@ -343,7 +343,7 @@ where $\Omega$ is the computational domain.
 
 The goal of the inverse modelling is to find such a distribution of the parameter $K$ which minimises the objective function $J$:
 
-$$K = \argmin_K J(\mathcal{L}(K); \mathcal{L}_\mathrm{obs})~.$$
+$$K = \mathrm{arg}\,\mathrm{min}\ J(\mathcal{L}(K); \mathcal{L}_\mathrm{obs})~.$$
 
 Therefore, the inverse modelling is tightly linked to the field of mathematical optimization. Numerous methods of finding the optimal value of $K$ exist, but in this workshop we will focus on _gradient-based_ methods. One of the simplest gradient-based method is the method of _the gradient descent_.
 
