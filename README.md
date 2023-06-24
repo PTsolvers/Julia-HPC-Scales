@@ -511,7 +511,7 @@ Automatic differentiation is a key ingredient of [_differentiable programming_](
 Julia has a rich support for differential programming. With the power of tools like [Enzyme.jl](https://enzyme.mit.edu/julia/stable/) it is possible to automatically compute the derivatives of arbitrary Julia code, including the code targeting GPUs. 
 
 ### VJP calculations
-One of the main building blocks in many optimization algorithms involves computing the vector-jacobian product (JVP). AD tools simplify evaluating JVPs by generating the code automatically given the target function.
+One of the main building blocks in many optimization algorithms involves computing the vector-Jacobian product (JVP). AD tools simplify evaluating JVPs by generating the code automatically given the target function.
 
 Let's familiarise with [Enzyme.jl](https://enzyme.mit.edu/julia/stable/), the Julia package for performing AD.
 
@@ -519,7 +519,7 @@ Let's familiarise with [Enzyme.jl](https://enzyme.mit.edu/julia/stable/), the Ju
 
 Let's start with a simple example:
 
-```julia
+```julia-repl
 julia> using Enzyme
 
 julia> f(ω,x) = sin(ω*x)
@@ -541,7 +541,7 @@ In this section, we will implement the gradient-based inversion algorithm for th
 
 > We will use the solution to the forward model as a synthetic dataset instead of real observations. We will only only a subset of the pressure field to emulate the sparsity of the datasets in the real world.
 
-### ✏️ Task 1: Adjoint sensitivity
+### Task 1: Adjoint sensitivity
 Before implementing the full inversion algorithm, we will learn how to compute the sensitivity of the solution with respect to changes in permeability. This is a useful building block in inverse modelling.
 
 To quantify the sensitivity, we will use the "sensitivity kernel" definition from [Reuber 2021](https://link.springer.com/article/10.1007/s13137-021-00186-y), which defines it as the derivative of the convolution of the the parameter of interest with unity. In this case, we will only compute the sensitivity of the pressure:
@@ -552,7 +552,7 @@ $$
 
 In this way, we can compute the point-wise sensitivity in only one additional linear solve.
 
-#### Task 1a: implement functions for evaluating VJPs using AD
+#### ✏️ Task 1a: implement functions for evaluating VJPs using AD
 Let's start by computing the VJP for the residual of the fluxes.
 
 Start from the file [geothermal_2D_gpu_kp_ad_sens.jl](scripts/geothermal_2D_gpu_kp_ad_sens.jl) and add the following implementation for the function `∇_residual_fluxes!`, replacing `#= ??? =#` in the implementation:
@@ -577,13 +577,13 @@ This is the purpose of the `Duplicated` parameter activity type. The first eleme
 
 Next, by default Enzyme would compute the primary values by running the function itself. In this case, it means that the residuals of the fluxes will be computed and stored in variables `Rqx` and `Rqz`. It can be very useful in the case when we compute both the forward solution and the sensitivity at the same time. We decided to split the forward and the inverse solve for efficiency reasons, so we don't need the already computed forward solution. We can potentially save the computations by marking the fields as `DuplicatedNoNeed`.
 
-In the [reverse mode](https://enzyme.mit.edu/julia/stable/generated/autodiff/#Reverse-mode) of derivative accumulation, also known as _backpropagation_ or _pullback_, one call to Enzyme computes the product of transposed Jacobian matrix and a vector, known as VJP (vector-Jacobian product). Enzyme also supports the forward mode of accumulation, which can be used to compute the jacobian-vector product (JVP) instead, but we won't use it in this workshop. 
+In the [reverse mode](https://enzyme.mit.edu/julia/stable/generated/autodiff/#Reverse-mode) of derivative accumulation, also known as _backpropagation_ or _pullback_, one call to Enzyme computes the product of transposed Jacobian matrix and a vector, known as VJP (vector-Jacobian product). Enzyme also supports the forward mode of accumulation, which can be used to compute the Jacobian-vector product (JVP) instead, but we won't use it in this workshop. 
 
 Implement a similar function for computing the derivatives of the pressure residual `∇_residual_pressure!`. In the following, we will also need the partial derivative of the fluxes residuals with respect to permeability $K$. Implement a new function `∇_residual_fluxes_s!`, but mark the variable `K` with the activity `DuplicatedNoNeed`, and variables `qx`, `qz`, and `Pf` as `Const` instead.
 
 > :bulb: Feel free to copy your implementation of the forward model into the file [geothermal_2D_gpu_kp_ad_sens.jl](scripts/geothermal_2D_gpu_kp_ad_sens.jl)
 
-#### Task 1b: Implement the iterative loop to compute the adjoint solution
+#### ✏️ Task 1b: Implement the iterative loop to compute the adjoint solution
 Now, we can start implementing the pseudo-transient loop for the adjoint solution.
 First, we need to allocate the additional storage for adjoint variables. Fill in the empty space in the file [geothermal_2D_gpu_kp_ad_sens.jl](scripts/geothermal_2D_gpu_kp_ad_sens.jl) just after the forward loop finishes, to allocate the arrays of the correct size.
 
@@ -597,7 +597,7 @@ For example, the adjoint flux `Ψ_qx` must have the same size as the flux `qx`:
 
 You can check the definitions of the functions for VJPs that you have just implemented, to understand how to assign correct sizes to the adjoint variables.
 
-Next, implement the pseudo-transient loop for the adjoint solution. It is important to understand that in the reverse mode of derivative accumulation the information propagates in the opposite direction compared to the forward solve. For the practical purposes, that means that if in the function `residual_fluxes!` the input variables `qx`, `qz`, and `Pf` were used to compute the residuals `Rqx` and `Rqz`, in the pullback function `∇_residual_fluxes!` we start from the adjoint variables `R̄qx` and `R̄qz`, and propagate the products of these variables and corresponding jacobians into the variables `q̄x`, `q̄z`, and `P̄f`.
+Next, implement the pseudo-transient loop for the adjoint solution. It is important to understand that in the reverse mode of derivative accumulation the information propagates in the opposite direction compared to the forward solve. For the practical purposes, that means that if in the function `residual_fluxes!` the input variables `qx`, `qz`, and `Pf` were used to compute the residuals `Rqx` and `Rqz`, in the pullback function `∇_residual_fluxes!` we start from the adjoint variables `R̄qx` and `R̄qz`, and propagate the products of these variables and corresponding Jacobians into the variables `q̄x`, `q̄z`, and `P̄f`.
 
 Enzyme.jl may overwrite the contents of the input variables `R̄qx` and `R̄qz`, so we cannot pass the adjoint variables `Ψ_qx` and `Ψ_qz` into the code, since we want to accumulate the results of the pseudo-transient integration. Therefore, we need to copy the values at each :
 
@@ -632,7 +632,7 @@ CUDA.@sync @cuda threads=nthread blocks=nblock update_pressure!(...)
 
 The optimal iteration parameters for the pseudo-transient algorithm are different for the forward and the adjoint problems. The optimal iteration parameter for the forward problem is stored in the variable `re`, and the one for the adjoint problem is stored in the variable `re_a`. Make sure to use the correct variable when updating the adjoint solution, otherwise the convergence will be very slow.
 
-> This explanation may sound incomplete, which is definitely true. To better understand why the functions are in such a mixed order, we recommend reading the section `Introduciton into inverse modelling` in this README, and to learn a bit more about AD, for example, in the [SciML book](https://book.sciml.ai/notes/10-Basic_Parameter_Estimation-Reverse-Mode_AD-and_Inverse_Problems/).
+> This explanation may sound incomplete, which is definitely true. To better understand why the functions are in such a mixed order, we recommend reading the section `Introduction into inverse modelling` in this README, and to learn a bit more about AD, for example, in the [SciML book](https://book.sciml.ai/notes/10-Basic_Parameter_Estimation-Reverse-Mode_AD-and_Inverse_Problems/).
 
 Finally, we also need to implement the boundary condition handling for the adjoint problem, but to keep the presentation short, instead of implementing the separate kernels for that we just computed the JVPs analytically for particular choice of BCs.=:
 
@@ -642,7 +642,7 @@ P̄f[[1, end], :] .= 0.0; P̄f[:, [1, end]] .= 0.0
 
 Now, propagate the gradients of the residuals for pressure and update adjoint fluxes `Ψ_qx` and `Ψ_qz`.
 
-#### Task 1c: evaluate the sensitivity
+#### ✏️ Task 1c: evaluate the sensitivity
 If you've implemented everything correctly, the adjoint solver must converge even faster than the forward solver. We can evaluate the objective function gradient using the adjoint solution. Recall from the introduction, that this gradient can be computed as
 
 $$
@@ -655,9 +655,9 @@ Note that the right-hand side of this equation is exactly the vector-Jacobian pr
 
 Congrats, now you can compute the point-wise sensitivities! We have all the building blocks to make the full inversion.
 
-### ✏️ Task 2: Inversion
+### Task 2: Inversion
 
-In this excercise, we will implement the gradient descent algorithm to progressively update the permeability $K$ using the gradient of the objective function to match the synthetically generated "observed" pressure field.
+In this exercise, we will implement the gradient descent algorithm to progressively update the permeability $K$ using the gradient of the objective function to match the synthetically generated "observed" pressure field.
 
 We will extract the code for solving the forward and adjoint problems into separate functions, and then wrap the adjoint solver in a loop for gradient descent.
 
@@ -669,11 +669,11 @@ $$
 
 As an optional exercise, you can implement different formulation to invert for fluxes $\boldsymbol{q}$ instead, or combine both pressures and fluxes with different weights.
 
-#### Task 2a: refactor the code by extracting the forward and inverse solvers into the 
+#### ✏️ Task 2a: refactor the code by extracting the forward and inverse solvers into the 
 
 Start from the file [geothermal_2D_gpu_kp_ad_inv.jl](scripts/geothermal_2D_gpu_kp_ad_inv.jl). You can copy the implementations of all the kernels from the previous file with the sensitivity computation.
 
-Note that there is one additional kernel `smooth_d!` in this file. This kernel smoothes the input field using several steps of diffusion. We wil use this kernel to implement the regularization of the inverse problem. In lay terms, we prevent the inverted permeability field from having sharp gradients. The reasons why it is needed and the derivation of the regularization terms are beyond the scope of this workshop.
+Note that there is one additional kernel `smooth_d!` in this file. This kernel smooths the input field using several steps of diffusion. We wil use this kernel to implement the regularization of the inverse problem. In lay terms, we prevent the inverted permeability field from having sharp gradients. The reasons why it is needed and the derivation of the regularization terms are beyond the scope of this workshop.
 
 You can find two new functions, `forward_solve!` and `adjoint_solve!`. This functions contain all the functionality required for computing the forward and inverse problem, respectively. You can simply copy the missing initialisation of the adjoint fields, kernel calls, and boundary conditions from the previous code.
 
@@ -690,11 +690,11 @@ You can temporarily comment the rest of the code and run it to make sure that it
 
 > Note that we pass the logarithm of permeability  $K$ into both the forward and adjoint solvers. This is necessary since the permeability in the barrier is 6 orders of magnitude lower that that of the surrounding subsurface. This is characteristic for the Earth's crust. Using the logarithm of the permeability as the control variable makes the inversion procedure much more robust, and avoids accidentally making the permeability negative, with would result in instability.
 
-#### Task 2b: implementing objective function and its gradient
+#### ✏️ Task 2b: implementing objective function and its gradient
 
 We have two more new functions in the file [geothermal_2D_gpu_kp_ad_inv.jl](scripts/geothermal_2D_gpu_kp_ad_inv.jl), namely `loss` and `∇loss!`. "Loss" is just another name for the objective function (which is also often called the "cost function"). It is obvious that in order to evaluate the loss function, one has to run the forward solver, and to evaluate the gradient, one needs to make the forward solve, followed by adjoint solve, and finally evaluate the gradient. Replace the `#= ??? =#` with corresponding calls to the forward and adjoint solvers, and finally the `∇_residual_fluxes_s!` function.
 
-In real world, the observations are sparse. We try to mimic this sparseness by saving only a subset of the synthetic solve results. We introduce the ranges containinng the coordinates of observations:
+In real world, the observations are sparse. We try to mimic this sparseness by saving only a subset of the synthetic solve results. We introduce the ranges containing the coordinates of observations:
 
 ```julia
 # observations
@@ -730,7 +730,7 @@ If in doubt, search the introduction for the answer :smirk:.
 
 Try to execute the functions `loss` and `∇loss!` in the code to make sure your implementation works as expected.
 
-#### Task 2c: implement the gradient descent
+#### ✏️ Task 2c: implement the gradient descent
 We can use the functions `loss` and `∇loss!` to iteratively update the permeability. We introduce the following shortcuts using the Julia [closures syntax](https://docs.julialang.org/en/v1/devdocs/functions/#Closures):
 
 ```julia
@@ -753,15 +753,15 @@ Inside the gradient descent loop, we adaptively compute the step size `γ` in su
 
 Complete the gradient descent loop: compute the loss function gradient using the function `∇J!`, and then update the logarithm of permeability using the computed gradient. Look in the introduction section for help.
 
-Congratulations, you successfully implemented the full inversion algorithm! Despite being very simple and not robust enough, the algorithm reproduces the approximate location and the shape of the low-permeability barrier.
+Congratulations :tada:, you successfully implemented the full inversion algorithm! Despite being very simple and not robust enough, the algorithm reproduces the approximate location and the shape of the low-permeability barrier.
 
 ## Optional exercises
 
-### Use `Optim.jl` instead of manual gradient descent
+### Use Optim.jl instead of manual gradient descent
 
-The functions `J` and `∇J!` now compute the loss function and its gradient in a black-box fashion. That means that we could replace our manually implemented gradient descent loop with a robust implementation of a production-level gradient-based optimisation algorithm. Many such algorithms are implemented in the package `Optim.jl`. Implementations in `Optim.jl` include automatic search for the step size (`γ` in our code), and improved search directions for faster convergence then just the direction of the steepest descent.
+The functions `J` and `∇J!` now compute the loss function and its gradient in a black-box fashion. That means that we could replace our manually implemented gradient descent loop with a robust implementation of a production-level gradient-based optimisation algorithm. Many such algorithms are implemented in the package [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl). Implementations in Optim.jl include automatic search for the step size (`γ` in our code), and improved search directions for faster convergence then just the direction of the steepest descent.
 
-Replace the gradient descent loop with a call to the function `optimize` from `Optim.jl`. Refer to the [documentation of `Optim.jl`](https://julianlsolvers.github.io/Optim.jl/stable/#user/minimization/) for the details. Use the `LBFGS` optimizer with the following options:
+Replace the gradient descent loop with a call to the function `optimize` from Optim.jl. Refer to the [documentation of `Optim.jl`](https://julianlsolvers.github.io/Optim.jl/stable/#user/minimization/) for the details. Use the `LBFGS` optimizer with the following options:
 
 ```julia
 opt = Optim.Options(
@@ -781,4 +781,4 @@ iters_evo = 1:length(errs_evo)
 plt.err[1] = Point2.(iters_evo, errs_evo)
 ```
 
-Compare the convergence rate between your implementation of gradient descent and the one from `Optim.jl`.
+Compare the convergence rate between your implementation of gradient descent and the one from Optim.jl.
