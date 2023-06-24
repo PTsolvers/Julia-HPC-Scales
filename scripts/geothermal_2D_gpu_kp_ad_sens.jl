@@ -70,6 +70,7 @@ end
     re      = 0.8π
     st      = ceil(Int, nx / 30)
     # preprocessing
+    re_a    = 2re  # adjoint re
     dx, dz  = lx / nx, lz / nz
     xc, zc  = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx), LinRange(dz / 2, lz - dz / 2, nz)
     vdτ     = cfl * min(dx, dz)
