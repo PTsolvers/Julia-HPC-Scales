@@ -358,14 +358,11 @@ To update $K$, one needs to be able to evaluate the gradient of the objective fu
 
 The objective function $J$ is a function of the solution $\mathcal{L}$, which depends on the parameter $K$ (in our case $K$ is the permeability). We can use the chain rule of differentiation to express the gradient:
 
-<table style="width: 100%">
-<td style="width: 100px;"></td>
-<td>
-<p align="center">
-  <img src="img/eq04.png" width="220px""/>
-</p>
-</td>
-<td style="width: 100px; text-align: right;">(1)</td>
+<table>
+  <td><p align="center">
+    <img src="img/eq04.png" width="220px"/>
+  </p></td>
+  <td>(1)</td>
 </table>
 
 In this expression, some of the terms are easy to compute. If the cost function is defined as a square of the difference between the modelled solution and observed values (see above), then $\partial J / \partial\mathcal{L} = \mathcal{L} - \mathcal{L}_\mathrm{obs}$, and $\partial J / \partial K = 0$. The tricky term is the derivative $\mathrm{d}\mathcal{L}/\mathrm{d}K$ of the solution w.r.t. the permeability. 
@@ -375,14 +372,11 @@ In this expression, some of the terms are easy to compute. If the cost function 
 Note that the solution $\mathcal{L}$ is a vector containing the fluxes $\boldsymbol{q}$ and the pressure $P_f$:
 
 
-<table style="width: 100%">
-<td style="width: 150px;"></td>
-<td>
-<p align="center">
+<table>
+<td><p align="center">
   <img src="img/eq05.png" width="260px""/>
-</p>
-</td>
-<td style="width: 150px; text-align: right;">(2)</td>
+</p></td>
+<td>(2)</td>
 </table>
 
 To compute this tricky term, we note that the solution to the forward problem nullifies the residual $R$. Since both $R_q=0$ and $R_{P_f}=0$ for any solution $\{\boldsymbol{q}, P_f\}$, the total derivative of $R_q$ and $R_{P_f}$ w.r.t. $K$ should be also $0$:
@@ -401,14 +395,11 @@ One could solve this system of equations to compute the derivatives. However, th
 
 Luckily, we are only interested in evaluating the obejective function gradient (1), which has the size of $1\times N_K$. This could be achieved by introducing extra variables $\Psi_{\boldsymbol{q}}$ and $\Psi_{P_f}$, called the _adjoint varialbes_. These adjoint variables satisfy the following _adjoint equation_:
 
-<table style="width: 100%">
-<td style="width: 100px;"></td>
-<td>
-<p align="center">
+<table>
+<td><p align="center">
   <img src="img/eq08.png" width="350px"/>
-</p>
-</td>
-<td style="width: 100px; text-align: right;">(3)</td>
+</p></td>
+<td>(3)</td>
 </table>
 
 The sizes of the unknowns $\Psi_{\boldsymbol{q}}$ and $\Psi_{P_f}$ are $N_{\boldsymbol{q}}\times 1$ and $N_{P_f}\times 1$, respectively. Therefore, solving the adjoint equation involves only one linear solve! The "tricky term" in the objective function gradient could be then easily computed. This is most evident if we recast the equation (2) into the matrix form:
