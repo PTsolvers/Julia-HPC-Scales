@@ -507,7 +507,7 @@ In the [reverse mode](https://enzyme.mit.edu/julia/stable/generated/autodiff/#Re
 
 Implement a similar function for computing the derivatives of the pressure residual `∇_residual_pressure!`. In the following, we will also need the partial derivative of the fluxes residuals with respect to permeability $K$. Implement a new function `∇_residual_fluxes_s!`, but mark the variable `K` with the activity `DuplicatedNoNeed`, and variables `qx`, `qz`, and `Pf` as `Const` instead.
 
-> :bulb: Feel free to copy your implementation of the forward model into the file [geothermal_2D_gpu_kp_ad_sens.jl](scripts/geothermal_2D_gpu_kp_ad_sens.jl)
+:bulb: Feel free to copy your implementation of the forward model into the file [geothermal_2D_gpu_kp_ad_sens.jl](scripts/geothermal_2D_gpu_kp_ad_sens.jl)
 
 #### ✏️ Task 1b: Implement the iterative loop to compute the adjoint solution
 Now, we can start implementing the pseudo-transient loop for the adjoint solution.
@@ -518,7 +518,7 @@ The idea here is that every adjoint variable should have exactly the same size a
 For example, the adjoint flux `Ψ_qx` must have the same size as the flux `qx`:
 
 ```julia
-Ψ_qx = CUDA.zeros(Float64, nx-1, nz)
+Ψ_qx = CUDA.zeros(Float64, nx+1, nz)
 ```
 
 You can check the definitions of the functions for VJPs that you have just implemented, to understand how to assign correct sizes to the adjoint variables.
@@ -555,6 +555,17 @@ The adjoint solver is also "transposed" compared to the forward one, which means
 ```julia
 CUDA.@sync @cuda threads=nthread blocks=nblock update_pressure!(...)
 ```
+
+> There is another option of calling Enzyme. We can delegate choosing the activity mode to the call site. You can define a small helper function to compute the gradient of an arbitrary function:
+> ```julia
+> @inline ∇(fun,args...) = (Enzyme.autodiff_deferred(Enzyme.Reverse, fun, args...); return)
+> const DupNN = DuplicatedNoNeed
+> ```
+> and then pass the activities during the call:
+> ```julia
+> CUDA.@sync @cuda threads=nthread blocks=nblock ∇(residual_fluxes!,DupNN(Rqx,R̄qx),#= ??? =#)
+> ```
+> This syntax is recommended for the use in "production", as it is more flexible and yields improved performance over the more straightforward version.
 
 The optimal iteration parameters for the pseudo-transient algorithm are different for the forward and the adjoint problems. The optimal iteration parameter for the forward problem is stored in the variable `re`, and the one for the adjoint problem is stored in the variable `re_a`. Make sure to use the correct variable when updating the adjoint solution, otherwise the convergence will be very slow.
 
