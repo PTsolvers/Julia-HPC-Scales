@@ -50,21 +50,8 @@ function update_pressure!()
     return
 end
 
-# adjoint
-function ∇_residual_fluxes!(Rqx, R̄qx, Rqz, R̄qz, qx, q̄x, qz, q̄z, Pf, P̄f, K, dx, dz)
-    #= ??? =#
-    return
-end
-
-function ∇_residual_pressure!(RPf, R̄Pf, qx, q̄x, qz, q̄z, Qf, dx, dz)
-    #= ??? =#
-    return
-end
-
-function ∇_residual_fluxes_s!(Rqx, R̄qx, Rqz, R̄qz, qx, qz, Pf, K, K̄, dx, dz)
-    #= ??? =#
-    return
-end
+@inline ∇(fun,args...) = (Enzyme.autodiff_deferred(Enzyme.Reverse, fun, args...); return)
+const DupNN = DuplicatedNoNeed
 
 @views function forward_solve!(logK, fields, scalars, iter_params; visu=nothing)
     (;Pf, qx, qz, Qf, RPf, Rqx, Rqz, K)               = fields
