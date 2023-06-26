@@ -518,7 +518,7 @@ The idea here is that every adjoint variable should have exactly the same size a
 For example, the adjoint flux `Ψ_qx` must have the same size as the flux `qx`:
 
 ```julia
-Ψ_qx = CUDA.zeros(Float64, nx-1, nz)
+Ψ_qx = CUDA.zeros(Float64, nx+1, nz)
 ```
 
 You can check the definitions of the functions for VJPs that you have just implemented, to understand how to assign correct sizes to the adjoint variables.
