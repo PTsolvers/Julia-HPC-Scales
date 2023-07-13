@@ -3,6 +3,10 @@ using CairoMakie
 using CUDA
 using Enzyme
 
+using ParallelStencil
+
+@init_parallel_stencil(CUDA, Float64, 2)
+
 macro d_xa(A) esc(:($A[ix+1, iz] - $A[ix, iz])) end
 macro d_za(A) esc(:($A[ix, iz+1] - $A[ix, iz])) end
 macro avx(A)  esc(:(0.5 * ($A[ix, iz] + $A[ix+1, iz]))) end
@@ -12,9 +16,7 @@ macro avz(A)  esc(:(0.5 * ($A[ix, iz] + $A[ix, iz+1]))) end
 @views maxloc(A) = max.(A[2:end-1, 2:end-1], max.(max.(A[1:end-2, 2:end-1], A[3:end, 2:end-1]),
                                                   max.(A[2:end-1, 1:end-2], A[2:end-1, 3:end])))
 
-function smooth_d!(A2, A)
-    ix = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    iz = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+@parallel_indices (ix,iz) function smooth_d!(A2, A)
     if (ix>1 && ix<size(A, 1) && iz>1 && iz<size(A, 2))
         @inbounds A2[ix, iz] = A[ix, iz] + 0.2 * (A[ix+1, iz] - 2A[ix, iz] + A[ix-1, iz] + A[ix, iz+1] - 2A[ix, iz] + A[ix, iz-1])
     end
@@ -23,37 +25,31 @@ end
 
 function smooth!(A2, A, nthread, nblock; nsm=1)
     for _ ∈ 1:nsm
-        CUDA.@sync @cuda threads=nthread blocks=nblock smooth_d!(A2, A)
+        @parallel (1:size(A,1), 1:size(A,2)) smooth_d!(A2, A)
         A, A2 = A2, A
     end
     return
 end
 
 # forward
-function residual_fluxes!(Rqx, Rqz, qx, qz, Pf, K, dx, dz)
-    ix = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    iz = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+@parallel_indices (ix,iz) function residual_fluxes!(Rqx, Rqz, qx, qz, Pf, K, dx, dz)
     @inbounds if (ix<=size(Rqx, 1) - 2 && iz<=size(Rqx, 2)    ) Rqx[ix+1, iz] = qx[ix+1, iz] + @avx(K) * @d_xa(Pf) / dx end
     @inbounds if (ix<=size(Rqz, 1)     && iz<=size(Rqz, 2) - 2) Rqz[ix, iz+1] = qz[ix, iz+1] + @avz(K) * @d_za(Pf) / dz end
     return
 end
 
-function residual_pressure!(RPf, qx, qz, Qf, dx, dz)
-    ix = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    iz = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+@parallel_indices (ix,iz) function residual_pressure!(RPf, qx, qz, Qf, dx, dz)
     @inbounds if (ix<=size(RPf, 1) && iz<=size(RPf, 2)) RPf[ix, iz] = @d_xa(qx) / dx + @d_za(qz) / dz - Qf[ix, iz] end
     return
 end
 
-function update_fluxes!(qx, qz, Rqx, Rqz, cfl, nx, nz, re)
-    ix = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    iz = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+@parallel_indices (ix,iz) function update_fluxes!(qx, qz, Rqx, Rqz, cfl, nx, nz, re)
     @inbounds if (ix<=size(qx, 1) - 2 && iz<=size(qx, 2)    ) qx[ix+1, iz] -= Rqx[ix+1, iz] / (1.0 + 2cfl * nx / re) end
     @inbounds if (ix<=size(qz, 1)     && iz<=size(qz, 2) - 2) qz[ix, iz+1] -= Rqz[ix, iz+1] / (1.0 + 2cfl * nz / re) end
     return
 end
 
-function update_pressure!(Pf, RPf, K_max, vdτ, lz, re)
+@parallel_indices (ix,iz) function update_pressure!(Pf, RPf, K_max, vdτ, lz, re)
     ix = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     iz = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     @inbounds if (ix<=size(Pf, 1) && iz<=size(Pf, 2)) Pf[ix, iz] -= RPf[ix, iz] * (vdτ * lz / re) / K_max[ix, iz] end
@@ -61,8 +57,6 @@ function update_pressure!(Pf, RPf, K_max, vdτ, lz, re)
 end
 # forward
 
-# adjoint
-@inline ∇(fun,args...) = (Enzyme.autodiff_deferred(Enzyme.Reverse, fun, args...); return)
 const DupNN = DuplicatedNoNeed
 
 @views function forward_solve!(logK, fields, scalars, iter_params; visu=nothing)
@@ -77,10 +71,10 @@ const DupNN = DuplicatedNoNeed
     iters_evo = Float64[]; errs_evo = Float64[]
     err = 2ϵtol; iter = 1
     while err >= ϵtol && iter <= maxiter
-        CUDA.@sync @cuda threads=nthread blocks=nblock residual_fluxes!(Rqx, Rqz, qx, qz, Pf, K, dx, dz)
-        CUDA.@sync @cuda threads=nthread blocks=nblock update_fluxes!(qx, qz, Rqx, Rqz, cfl, nx, nz, re)
-        CUDA.@sync @cuda threads=nthread blocks=nblock residual_pressure!(RPf, qx, qz, Qf, dx, dz)
-        CUDA.@sync @cuda threads=nthread blocks=nblock update_pressure!(Pf, RPf, K_max, vdτ, lz, re)
+        @parallel (1:nx, 1:nz) residual_fluxes!(Rqx, Rqz, qx, qz, Pf, K, dx, dz)
+        @parallel (1:nx, 1:nz) update_fluxes!(qx, qz, Rqx, Rqz, cfl, nx, nz, re)
+        @parallel (1:nx, 1:nz) residual_pressure!(RPf, qx, qz, Qf, dx, dz)
+        @parallel (1:nx, 1:nz) update_pressure!(Pf, RPf, K_max, vdτ, lz, re)
         if iter % ncheck == 0
             err = maximum(abs.(RPf))
             push!(iters_evo, iter/nx); push!(errs_evo, err)
@@ -119,22 +113,13 @@ end
         P̄f  .= .-∂J_∂Pf
         q̄x  .= 0.0
         q̄z  .= 0.0
-        CUDA.@sync @cuda threads=nthread blocks=nblock ∇(residual_fluxes!,
-            DupNN(Rqx, R̄qx),
-            DupNN(Rqz, R̄qz),
-            DupNN(qx, q̄x),
-            DupNN(qz, q̄z),
-            DupNN(Pf, P̄f),
-            Const(K), Const(dx), Const(dz))
+
+        @parallel (1:nx, 1:nz) ∇=(Rqx->R̄qx, Rqz->R̄qz, qx->q̄x, qz->q̄z, Pf->P̄f) residual_fluxes!(Rqx, Rqz, qx, qz, Pf, K, dx, dz)
         P̄f[[1, end], :] .= 0.0; P̄f[:, [1, end]] .= 0.0
-        CUDA.@sync @cuda threads=nthread blocks=nblock update_pressure!(Ψ_Pf, P̄f, K_max, vdτ, lz, re_a)
+        @parallel (1:nx, 1:nz) update_pressure!(Ψ_Pf, P̄f, K_max, vdτ, lz, re_a)
         R̄Pf .= Ψ_Pf
-        CUDA.@sync @cuda threads=nthread blocks=nblock ∇(residual_pressure!,
-            DupNN(RPf, R̄Pf),
-            DupNN(qx, q̄x),
-            DupNN(qz, q̄z),
-            Const(Qf), Const(dx), Const(dz))
-        CUDA.@sync @cuda threads=nthread blocks=nblock update_fluxes!(Ψ_qx, Ψ_qz, q̄x, q̄z, cfl, nx, nz, re_a)
+        # @parallel ∇=(RPf->R̄Pf, qx->q̄x, qz->q̄z) ad_mode=Reverse (1:nx, 1:nz) residual_pressure!(RPf, qx, qz, Qf, dx, dz)
+        @parallel (1:nx, 1:nz) update_fluxes!(Ψ_qx, Ψ_qz, q̄x, q̄z, cfl, nx, nz, re_a)
         if iter % ncheck == 0
             err = maximum(abs.(P̄f))
             push!(iters_evo, iter/nx); push!(errs_evo, err)
@@ -323,3 +308,20 @@ end
 end
 
 main()
+
+@parallel_indices (ix,iy) function f!(A,B,s)
+    A[ix,iy] = B[ix,iy]*s
+    return
+end
+
+A = zeros(2,2)
+Ā = zeros(2,2)
+B = zeros(2,2)
+B̄ = zeros(2,2)
+s = 1.0
+
+nx,ny = size(A)
+
+@parallel (1:nx, 1:ny) f!(A,B,s)
+
+@parallel (1:nx, 1:ny) ∇=(A->Ā,B->B̄) f!(A,B,s)
