@@ -1,7 +1,11 @@
 using Printf, LinearAlgebra
 using CairoMakie
-using CUDA
 using Enzyme
+
+using ParallelStencil
+
+@init_parallel_stencil(CUDA, Float64, 2)
+CUDA.device!(1)
 
 macro d_xa(A) esc(:($A[ix+1, iz] - $A[ix, iz])) end
 macro d_za(A) esc(:($A[ix, iz+1] - $A[ix, iz])) end
@@ -12,62 +16,48 @@ macro avz(A)  esc(:(0.5 * ($A[ix, iz] + $A[ix, iz+1]))) end
 @views maxloc(A) = max.(A[2:end-1, 2:end-1], max.(max.(A[1:end-2, 2:end-1], A[3:end, 2:end-1]),
                                                   max.(A[2:end-1, 1:end-2], A[2:end-1, 3:end])))
 
-function smooth_d!(A2, A)
-    ix = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    iz = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+@parallel_indices (ix,iz) function smooth_d!(A2, A)
     if (ix>1 && ix<size(A, 1) && iz>1 && iz<size(A, 2))
         @inbounds A2[ix, iz] = A[ix, iz] + 0.2 * (A[ix+1, iz] - 2A[ix, iz] + A[ix-1, iz] + A[ix, iz+1] - 2A[ix, iz] + A[ix, iz-1])
     end
     return
 end
 
-function smooth!(A2, A, nthread, nblock; nsm=1)
+function smooth!(A2, A; nsm=1)
     for _ ∈ 1:nsm
-        CUDA.@sync @cuda threads=nthread blocks=nblock smooth_d!(A2, A)
+        @parallel smooth_d!(A2, A)
         A, A2 = A2, A
     end
     return
 end
 
 # forward
-function residual_fluxes!(Rqx, Rqz, qx, qz, Pf, K, dx, dz)
-    ix = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    iz = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+@parallel_indices (ix,iz) function residual_fluxes!(Rqx, Rqz, qx, qz, Pf, K, dx, dz)
     @inbounds if (ix<=size(Rqx, 1) - 2 && iz<=size(Rqx, 2)    ) Rqx[ix+1, iz] = qx[ix+1, iz] + @avx(K) * @d_xa(Pf) / dx end
     @inbounds if (ix<=size(Rqz, 1)     && iz<=size(Rqz, 2) - 2) Rqz[ix, iz+1] = qz[ix, iz+1] + @avz(K) * @d_za(Pf) / dz end
     return
 end
 
-function residual_pressure!(RPf, qx, qz, Qf, dx, dz)
-    ix = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    iz = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+@parallel_indices (ix,iz) function residual_pressure!(RPf, qx, qz, Qf, dx, dz)
     @inbounds if (ix<=size(RPf, 1) && iz<=size(RPf, 2)) RPf[ix, iz] = @d_xa(qx) / dx + @d_za(qz) / dz - Qf[ix, iz] end
     return
 end
 
-function update_fluxes!(qx, qz, Rqx, Rqz, cfl, nx, nz, re)
-    ix = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    iz = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+@parallel_indices (ix,iz) function update_fluxes!(qx, qz, Rqx, Rqz, cfl, nx, nz, re)
     @inbounds if (ix<=size(qx, 1) - 2 && iz<=size(qx, 2)    ) qx[ix+1, iz] -= Rqx[ix+1, iz] / (1.0 + 2cfl * nx / re) end
     @inbounds if (ix<=size(qz, 1)     && iz<=size(qz, 2) - 2) qz[ix, iz+1] -= Rqz[ix, iz+1] / (1.0 + 2cfl * nz / re) end
     return
 end
 
-function update_pressure!(Pf, RPf, K_max, vdτ, lz, re)
-    ix = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    iz = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+@parallel_indices (ix,iz) function update_pressure!(Pf, RPf, K_max, vdτ, lz, re)
     @inbounds if (ix<=size(Pf, 1) && iz<=size(Pf, 2)) Pf[ix, iz] -= RPf[ix, iz] * (vdτ * lz / re) / K_max[ix, iz] end
     return
 end
 # forward
 
-# adjoint
-@inline ∇(fun,args...) = (Enzyme.autodiff_deferred(Enzyme.Reverse, fun, args...); return)
-const DupNN = DuplicatedNoNeed
-
 @views function forward_solve!(logK, fields, scalars, iter_params; visu=nothing)
     (;Pf, qx, qz, Qf, RPf, Rqx, Rqz, K)               = fields
-    (;nx, nz, dx, dz, nthread, nblock)                = scalars
+    (;nx, nz, dx, dz)                                 = scalars
     (;cfl, re, vdτ, lz, ϵtol, maxiter, ncheck, K_max) = iter_params
     isnothing(visu) || ((;qx_c, qz_c, qM, fig, plt, st) = visu)
     K .= exp.(logK)
@@ -77,10 +67,10 @@ const DupNN = DuplicatedNoNeed
     iters_evo = Float64[]; errs_evo = Float64[]
     err = 2ϵtol; iter = 1
     while err >= ϵtol && iter <= maxiter
-        CUDA.@sync @cuda threads=nthread blocks=nblock residual_fluxes!(Rqx, Rqz, qx, qz, Pf, K, dx, dz)
-        CUDA.@sync @cuda threads=nthread blocks=nblock update_fluxes!(qx, qz, Rqx, Rqz, cfl, nx, nz, re)
-        CUDA.@sync @cuda threads=nthread blocks=nblock residual_pressure!(RPf, qx, qz, Qf, dx, dz)
-        CUDA.@sync @cuda threads=nthread blocks=nblock update_pressure!(Pf, RPf, K_max, vdτ, lz, re)
+        @parallel residual_fluxes!(Rqx, Rqz, qx, qz, Pf, K, dx, dz)
+        @parallel update_fluxes!(qx, qz, Rqx, Rqz, cfl, nx, nz, re)
+        @parallel residual_pressure!(RPf, qx, qz, Qf, dx, dz)
+        @parallel update_pressure!(Pf, RPf, K_max, vdτ, lz, re)
         if iter % ncheck == 0
             err = maximum(abs.(RPf))
             push!(iters_evo, iter/nx); push!(errs_evo, err)
@@ -105,7 +95,7 @@ end
 @views function adjoint_solve!(logK, fwd_params, adj_params, loss_params)
     # unpack forward
     (;Pf, qx, qz, Qf, RPf, Rqx, Rqz, K) = fwd_params.fields
-    (;nx, nz, dx, dz, nthread, nblock)  = fwd_params.scalars
+    (;nx, nz, dx, dz)  = fwd_params.scalars
     # unpack adjoint
     (;P̄f, q̄x, q̄z, R̄Pf, R̄qx, R̄qz, Ψ_qx, Ψ_qz, Ψ_Pf)      = adj_params.fields
     (;∂J_∂Pf)                                           = loss_params.fields
@@ -119,22 +109,13 @@ end
         P̄f  .= .-∂J_∂Pf
         q̄x  .= 0.0
         q̄z  .= 0.0
-        CUDA.@sync @cuda threads=nthread blocks=nblock ∇(residual_fluxes!,
-            DupNN(Rqx, R̄qx),
-            DupNN(Rqz, R̄qz),
-            DupNN(qx, q̄x),
-            DupNN(qz, q̄z),
-            DupNN(Pf, P̄f),
-            Const(K), Const(dx), Const(dz))
+
+        @parallel ∇=(Rqx->R̄qx, Rqz->R̄qz, qx->q̄x, qz->q̄z, Pf->P̄f) residual_fluxes!(Rqx, Rqz, qx, qz, Pf, K, dx, dz)
         P̄f[[1, end], :] .= 0.0; P̄f[:, [1, end]] .= 0.0
-        CUDA.@sync @cuda threads=nthread blocks=nblock update_pressure!(Ψ_Pf, P̄f, K_max, vdτ, lz, re_a)
+        @parallel update_pressure!(Ψ_Pf, P̄f, K_max, vdτ, lz, re_a)
         R̄Pf .= Ψ_Pf
-        CUDA.@sync @cuda threads=nthread blocks=nblock ∇(residual_pressure!,
-            DupNN(RPf, R̄Pf),
-            DupNN(qx, q̄x),
-            DupNN(qz, q̄z),
-            Const(Qf), Const(dx), Const(dz))
-        CUDA.@sync @cuda threads=nthread blocks=nblock update_fluxes!(Ψ_qx, Ψ_qz, q̄x, q̄z, cfl, nx, nz, re_a)
+        @parallel ∇=(RPf->R̄Pf, qx->q̄x, qz->q̄z) residual_pressure!(RPf, qx, qz, Qf, dx, dz)
+        @parallel update_fluxes!(Ψ_qx, Ψ_qz, q̄x, q̄z, cfl, nx, nz, re_a)
         if iter % ncheck == 0
             err = maximum(abs.(P̄f))
             push!(iters_evo, iter/nx); push!(errs_evo, err)
@@ -158,7 +139,7 @@ function ∇loss!(logK̄, logK, fwd_params, adj_params, loss_params; reg=nothing
     # unpack
     (;R̄qx, R̄qz, Ψ_qx, Ψ_qz)    = adj_params.fields
     (;Pf, qx, qz, Rqx, Rqz, K) = fwd_params.fields
-    (;dx, dz, nthread, nblock) = fwd_params.scalars
+    (;dx, dz)                  = fwd_params.scalars
     (;Pf_obs, ∂J_∂Pf)          = loss_params.fields
     (;ixobs, izobs)            = loss_params.scalars
     @info "Forward solve"
@@ -171,23 +152,17 @@ function ∇loss!(logK̄, logK, fwd_params, adj_params, loss_params; reg=nothing
     R̄qx .= .-Ψ_qx
     R̄qz .= .-Ψ_qz
     logK̄ .= 0.0
-    CUDA.@sync @cuda threads=nthread blocks=nblock ∇(residual_fluxes!,
-        DupNN(Rqx, R̄qx),
-        DupNN(Rqz, R̄qz),
-        Const(qx), Const(qz), Const(Pf),
-        DupNN(logK, logK̄),
-        Const(dx), Const(dz))
+    @parallel ∇=(Rqx->R̄qx, Rqz->R̄qz, logK->logK̄) residual_fluxes!(Rqx, Rqz, qx, qz, Pf, logK, dx, dz)
     # Tikhonov regularisation (smoothing)
     if !isnothing(reg)
         (;nsm, Tmp) = reg
-        Tmp .= logK̄; smooth!(logK̄, Tmp, nthread, nblock; nsm)
+        Tmp .= logK̄; smooth!(logK̄, Tmp; nsm)
     end
     logK̄ .*= K # convert to dJ_dlogK by chain rule
     return
 end
 
 @views function main()
-    CUDA.device!(0) # select your GPU
     # physics
     lx, lz  = 2.0, 1.0 # domain extend
     k0_μ    = 1.0      # background permeability / fluid viscosity
@@ -202,8 +177,6 @@ end
     # numerics
     nz       = 255
     nx       = ceil(Int, (nz + 1) * lx / lz) - 1
-    nthread  = (16, 16)
-    nblock   = cld.((nx, nz), nthread)
     cfl      = 1 / 2.1
     ϵtol     = 1e-6
     maxiter  = 30nx
@@ -221,28 +194,28 @@ end
     ixobs    = floor.(Int, (xobs_rng .- xc[1]) ./ dx) .+ 1
     izobs    = floor.(Int, (zobs_rng .- zc[1]) ./ dz) .+ 1
     # init
-    Pf       = CUDA.zeros(Float64, nx, nz)
-    RPf      = CUDA.zeros(Float64, nx, nz)
-    qx       = CUDA.zeros(Float64, nx + 1, nz)
-    Rqx      = CUDA.zeros(Float64, nx + 1, nz)
-    qz       = CUDA.zeros(Float64, nx, nz + 1)
-    Rqz      = CUDA.zeros(Float64, nx, nz + 1)
-    Qf       = CUDA.zeros(Float64, nx, nz)
-    K        = k0_μ .* CUDA.ones(Float64, nx, nz)
-    logK     = CUDA.zeros(Float64, nx, nz)
-    Tmp      = CUDA.zeros(Float64, nx, nz)
+    Pf       = @zeros(nx, nz)
+    RPf      = @zeros(nx, nz)
+    qx       = @zeros(nx + 1, nz)
+    Rqx      = @zeros(nx + 1, nz)
+    qz       = @zeros(nx, nz + 1)
+    Rqz      = @zeros(nx, nz + 1)
+    Qf       = @zeros(nx, nz)
+    K        = k0_μ .* @ones(nx, nz)
+    logK     = @zeros(nx, nz)
+    Tmp      = @zeros(nx, nz)
     # init adjoint storage
-    Ψ_qx     = CUDA.zeros(Float64, nx + 1, nz)
-    q̄x       = CUDA.zeros(Float64, nx + 1, nz)
-    R̄qx      = CUDA.zeros(Float64, nx + 1, nz)
-    Ψ_qz     = CUDA.zeros(Float64, nx, nz + 1)
-    q̄z       = CUDA.zeros(Float64, nx, nz + 1)
-    R̄qz      = CUDA.zeros(Float64, nx, nz + 1)
-    Ψ_Pf     = CUDA.zeros(Float64, nx, nz)
-    P̄f       = CUDA.zeros(Float64, nx, nz)
-    R̄Pf      = CUDA.zeros(Float64, nx, nz)
-    ∂J_∂Pf   = CUDA.zeros(Float64, nx, nz)
-    dJ_dlogK = CUDA.zeros(Float64, nx, nz)
+    Ψ_qx     = @zeros(nx + 1, nz)
+    q̄x       = @zeros(nx + 1, nz)
+    R̄qx      = @zeros(nx + 1, nz)
+    Ψ_qz     = @zeros(nx, nz + 1)
+    q̄z       = @zeros(nx, nz + 1)
+    R̄qz      = @zeros(nx, nz + 1)
+    Ψ_Pf     = @zeros(nx, nz)
+    P̄f       = @zeros(nx, nz)
+    R̄Pf      = @zeros(nx, nz)
+    ∂J_∂Pf   = @zeros(nx, nz)
+    dJ_dlogK = @zeros(nx, nz)
     # set low permeability barrier location
     K[ceil(Int, (lx/2-b_w)/dx):ceil(Int, (lx/2+b_w)/dx), ceil(Int, b_b/dz):ceil(Int, b_t/dz)] .= kb_μ
     logK .= log.(K)
@@ -271,7 +244,7 @@ end
     # action
     fwd_params = (
         fields      = (;Pf, qx, qz, Qf, RPf, Rqx, Rqz, K),
-        scalars     = (;nx, nz, dx, dz, nthread, nblock),
+        scalars     = (;nx, nz, dx, dz),
         iter_params = (;cfl, re, vdτ, lz, ϵtol, maxiter, ncheck, K_max),
     )
     fwd_visu = (;qx_c, qz_c, qM, fig, plt, st)
